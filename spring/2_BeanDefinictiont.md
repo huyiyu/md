@@ -6,7 +6,7 @@
 * 为什么需要 BeanDefiniction 
 > spring bean 具有 普通对象无法描述的行为,建立一个描述 spring bean 的行为如(如作用域,自动注入模型,是否作为候选Bean等信息)
 ## BeanDefiniction 体系结构
-![BeanDefiniction 类图](img/classview.png)
+![BeanDefiniction 类图](img/BeanDefinition.png)
 * AttributeAccessor: 供了一套对属性CRUD的顶层接口
 * AttributeAccessorSupport: 实现了这一组接口内部是一个LinkedHashMap,将Map作为存储空间提供属性的CRUD
 * BeanMetaDataElement: 提供了获取 source 的顶层实现
@@ -14,8 +14,8 @@
 * BeanDefinition: 是一个子接口,他的两个父接口为 AttributeAccessor(属性访问器),BeanMetadataElement(Bean 元数据元素),
 * AbstractBeanDefiniction: 提供一个 Bean Definiction模板并提供一些BeanDefinition 的默认配置它继承AttributeAccessorSupport获得了设置source 和对attrbute 的CRUD,
 * GenericBeanDefinition: 通用的BeanDefinition，提供给程序员开发使用,可直接往BeanFactory中设置
-* ChildBeanDefinition:
-* RootBeanDefinition:
+* ChildBeanDefinition:***注意, ChildBeanDefinition 不能设置父 BeanDefinition ***
+* RootBeanDefinition:***注意, RootBeanDefinition 不能设置父 BeanDefinition ***
 * ClassDriverBeanDefinition:
 * ScannedGenericBeanDefinition:
 * AnnotationGenericBeanDefinition:
