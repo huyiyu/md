@@ -58,7 +58,7 @@
   * 如果suppressedExceptions为空,初始化suppressedExceptions空列表(乐观加锁)
   * 调用 singletonFactory 的回调创建Bean
   * 如果Bean创建成功 添加到一级缓存
-* onSuppressedException: 尝试将对象创建过程的异常保存到 suppressedExceptions
+* onSuppressedException: 尝试将对象创建过程的异常保存到 suppressedExcept·ions
 * removeSingleton: 移除某个单例
 * containsSingleton: 根据名称判断某个对象是否存在一级缓存中
 * getSingletonNames: 获取所有已经注册的单例名称
@@ -78,6 +78,24 @@
 
 * getSingletonMutex:这个方法用于给创建对象加锁
 ### FactoryBeanRegistrySupport
+#### 属性
+* factoryBeanObjectCache: FactoryBean 的缓存对象 key: BeanName value: FactoryBean 调用 getObject的返回对象,简称FO对象
+
+#### 方法
+* getTypeForFactoryBean: 通过调用FactoryBean 的getIObjectType获取类类型
+* getCachedObjectForFactoryBean: 从 factoryBeanObjectCache 中获取  FO 对象
+* getObjectFromFactoryBean: 从给定的 FactoryBean 获取要公开的对象。
+  * 尝试从 factoryBeanObjectCache 中获取对象
+  * 如果没有 调用 factoryBean的getObject 获取
+  * 如果对象处于创建状态中,此时直接返回
+  * 当且仅当对象创建完成时,且需要执行后处理器,且仍未放入 factoryBeanObjectCache 时执行后处理器
+  * 如果获取的对象不是单例的,如(SqlSession) 那么每次创建都会执行后处理器 并且不放入缓存
+* doGetObjectFromFactoryBean: 尝试从FactoryBean中调用getObject方法,返回值为Null时处理返回位NullBean
+* postProcessObjectFromFactoryBean: 此处直接返回,实际运行时执行子类方法
+* getFactoryBean:将Object 强转为 FactoryBean 如果不是此类型报错
+* removeSingleton: 重写并移除 factoryBeanObjectCache 中的缓存
+* clearSingletonCache: 重写并清空 factoryBeanObjectCache 中的缓存
+* 
 
 ### AbstractBeanFactory
 
