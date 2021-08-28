@@ -2,12 +2,12 @@
 
 ## BeanFactory 体系结构
 ![类图](../../img/BeanFactory.png)
-* [1.1 SimpleAliasRegistry ](./1.1_SimpleAliasRegistry.md)
-* [1.2 DefaultSingletonBeanRegistry](1.2_DefaultSingletonBeanRegistry.md)
-* [1.3 FactoryBeanRegistrySupport](1.3_FactoryBeanRegistrySupport.md)
-* [1.4 AbstractBeanFactory](1.4_AbstractBeanFactory.md)
-* [1.5 AbstractAutowireCapableBeanFactory](1.5_AbstractAutowireCapableBeanFactory.md)
-* [1.6 DefaultListableBeanFactory](1.6_AbstractBeanFactory.md)
+* [2.1 SimpleAliasRegistry ](./2.1_SimpleAliasRegistry.md)
+* [2.2 DefaultSingletonBeanRegistry](./2.2_DefaultSingletonBeanRegistry.md)
+* [2.3 FactoryBeanRegistrySupport](./2.3_FactoryBeanRegistrySupport.md)
+* [2.4 AbstractBeanFactory](./2.4_AbstractBeanFactory.md)
+* [2.5 AbstractAutowireCapableBeanFactory](./2.5_AbstractAutowireCapableBeanFactory.md)
+* [2.6 DefaultListableBeanFactory](./2.6_DefaultListableBeanFactory.md)
 ## ApplicationContext 体系结构
-![类图](../img/ApplicationContext.png)
+![类图](../../img/ApplicationContext.png)
 
