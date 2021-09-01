@@ -49,7 +49,7 @@
 * factoryMethodName: 工厂方法的名称
 * constructorArgumentValues: 构造方法参数
 * propertyValues: 对应Bean的属性值
-* methodOverrides: 方法覆盖的持有者,用于 `lookup-method`、`replaced-method`技术
+* methodOverrides: 方法覆盖的持有者,用于 `lookup-method`、`replaced-method` 技术
 * initMethodName: 设置初始化方法的值
 * destroyMethodName: 设置销毁方法的值,这里有一个没营养的知识,当该值为"(inferred)"时,默认使用shutdown 或close的方法名对应方法作为销毁方法
 * enforceInitMethod: 判断是否执行init方法
