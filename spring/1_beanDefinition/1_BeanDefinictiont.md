@@ -6,7 +6,7 @@
 * 为什么需要 BeanDefiniction 
 > spring bean 具有 普通对象无法描述的行为,建立一个描述 spring bean 的行为如(如作用域,自动注入模型,是否作为候选Bean等信息)
 ## BeanDefiniction 体系结构
-![BeanDefiniction 类图](img/BeanDefinition.png)
+![BeanDefiniction 类图](../img/BeanDefinition.png)
 * AttributeAccessor: 供了一套对属性CRUD的顶层接口
 * AttributeAccessorSupport: 实现了这一组接口内部是一个LinkedHashMap,将Map作为存储空间提供属性的CRUD
 * BeanMetaDataElement: 提供了获取 source 的顶层实现
