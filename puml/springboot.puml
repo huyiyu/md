@@ -1,0 +1,23 @@
+@startuml
+@startmindmap
+* spring-boot 启动
+** 创建 SpringApplication 对象
+*** webApplicationType 判断应用类型
+*** primarySource 保存启动 class 参数
+*** spring boot spi 加载
+**** 获取Bootstrappers 存入 bootstrappers
+**** 获取ApplicationContextInitializer 存入 initializers
+**** 获取APplicationListener 存入 listeners
+*** 获取启动类 class 
+** 运行 run 方法
+*** 注册 BootStrappers
+*** 发布 starting 事件
+*** 加载environment事件
+*** 打印 Banner
+*** 创建 ApplicationContext 
+*** 准备 ApplicationContext 
+*** 执行 refresh
+*** 发布 started 事件
+*** 调用Runner
+@endmindmap
+@enduml
