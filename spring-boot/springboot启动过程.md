@@ -150,13 +150,60 @@ private Class<?> deduceMainApplicationClass() {
 
 ### 1.2.2 发布 Starting 事件
 
-> 三个不同的对象
+> 三个不同的对象，具体逻辑参照[事件矩阵图](#事件矩阵图)
 
 * ***SpringApplicationRunListeners***: 封装了 `SpringApplicationRunListener`对象列表的对象
 * ***SpringApplicationRunListener***: spring boot 封装的时间发布订阅工具,默认实现为 `EventPublishingRunListener`, 底层使用spring的发布订阅器 `SimpleApplicationEventMulticaster`
 * ***ApplicationListener***: 真正的事件监听器,与原生spring 事件发布订阅保持一致
 
-#### 1.2.2.1 发布事件逻辑
+### 1.2.3 创建 Environment 对象
+
+1. 通过判断[webApplicationType](#112-判断应用类型)分别创建不同的Environment对象
+2. 设置Environment的转换器 ConvertionService,将命令行传递参数新建PropertySource(命令行参数传递的规则是--key=value,可通过查阅源码知道) 设置到最优先级
+3. ***没有强迫症可以不看,只记住结论!!!*** 将现有的Environment的PropertySource **列表容器** 包装起来提供一个能将 `.`,`-`转换成 `_`去匹配原有PropertySource 的功能,关注[附录:attach 解析](#attach-environment-解析)
+4. 发布environment 准备好的消息,参照[事件矩阵图](#事件矩阵图)
+5. 将environment 中名称为 `default`的propertySource 移动到最后面
+6.
+
+### 1.2.4 打印 Banner
+
+### 创建ApplicationContext
+
+### 准备ApplicationContext
+
+### 执行Refresh
+
+### 发布started 事件
+
+### 调用Runner
+
+## 附录
+
+### 事件矩阵图
+
+|     事件\监听器     | EnvironmentPostProcessor | `AnsiOutput` | `Logging` | `BackgroundPreinitializer` | `Delegating` | `ParentContextCloser` | `ClearCaches` | `FileEncoding` | `LiquibaseServiceLocator` |
+| :-----------------: | :----------------------: | :------------: | :---------- | ---------------------------- | -------------- | :---------------------: | :-------------: | :--------------: | :-------------------------: |
+|      starting      |            -            |       -       | 1           | 2                            | 3              |            -            |        -        |        -        |              4              |
+| environmentPrepared |            1            |       2       | 3           | 4                            | 5              |            -            |        -        |        6        |              -              |
+|   contextPrepared   |                         |               |             |                              |                |                         |                 |                 |                             |
+|    contextLoaded    |                         |               |             |                              |                |                         |                 |                 |                             |
+|       started       |                         |               |             |                              |                |                         |                 |                 |                             |
+|       running       |                         |               |             |                              |                |                         |                 |                 |                             |
+|       failed       |                         |               |             |                              |                |                         |                 |                 |                            |
+
+#### starting
+
+1. LoggingApplicationListener: 如果环境变量 `org.springframework.boot.logging.LoggingSystem` 有值反射作为默认日志,否则从[spring-spi](#113-spring-boot-spi-加载流程)中获取第一个LoggingSystem 作为默认日志系统,执行预初始化
+2. ~~BackgroundPreinitializer: 没有业务逻辑,因为发布事件类型不属于 ApplicationEnvironmentPreparedEvent 或 ApplicationReadyEvent 或 ApplicationFailedEvent~~
+3. ~~DelegatingApplicationListener: 无逻辑 因为事件类型不属于 DelegatingApplicationListener~~
+4. ~~LiquibaseServiceLocatorApplicationListener: 无逻辑 没有使用LiquiBase~~
+
+#### environmentPrepare
+··
+1. EnvironmentPostProcessorApplicationListener-environmentPrepare:  创建从[spring boot SPI](#113-spring-boot-spi-加载流程)加载的EnvironmentPostProcessor 并全量执行postProcessEnvironment
+2.
+
+### 发布事件逻辑
 
 1. 事件发布方法有: `starting`,`environmentPrepare`,`context-prepare`,`contextLoaded`，`started`,`running`,`failed`
 
@@ -225,36 +272,107 @@ public boolean supportsSourceType(@Nullable Class<?> sourceType) {
 
 ```
 
-#### 1.2.1.2 事件矩阵图
+### attach 解析
 
-|     事件\监听器     | EnvironmentPostProcessor | `AnsiOutput` | `Logging` | `BackgroundPreinitializer` | `Delegating` | `ParentContextCloser` | `ClearCaches` | `FileEncoding` | `LiquibaseServiceLocator` |
-| :-----------------: | :----------------------: | :------------: | :---------- | ---------------------------- | -------------- | :---------------------: | :-------------: | :--------------: | --------------------------- |
-|      starting      |            -            |       -       | 1           | 2                            | 3              |            -            |        -        |        -        | 4                           |
-| environmentPrepared |                         |               |             |                              |                |                         |                 |                 |                             |
-|   contextPrepared   |                         |               |             |                              |                |                         |                 |                 |                             |
-|    contextLoaded    |                         |               |             |                              |                |                         |                 |                 |                             |
-|       started       |                         |               |             |                              |                |                         |                 |                 |                             |
-|       running       |                         |               |             |                              |                |                         |                 |                 |                             |
-|       failed       |                         |               |             |                              |                |                         |                 |                 |                             |
+1. `SpringConfigurationPropertySources`能将普通 `propertySource`列表包装成一个 `configurationPropertySource`
 
-1. LoggingApplicationListener-starting: 如果环境变量 `org.springframework.boot.logging.LoggingSystem` 有值反射作为默认日志,否则从[spring-spi](#113-spring-boot-spi-加载流程)中获取第一个LoggingSystem 作为默认日志系统,执行预初始化
-2. ~~BackgroundPreinitializer-starting: 没有业务逻辑,因为发布事件类型不属于 ApplicationEnvironmentPreparedEvent 或 ApplicationReadyEvent 或 ApplicationFailedEvent~~
-3. ~~DelegatingApplicationListener-starting: 无逻辑 因为事件类型不属于 DelegatingApplicationListener~~
-4. ~~LiquibaseServiceLocatorApplicationListener-starting: 无逻辑 没有使用LiquiBase~~
+```java
+// 实现Iterable接口使其可以使用增强for循环
+class SpringConfigurationPropertySources implements Iterable<ConfigurationPropertySource> {
 
-### 1.2.3 创建 Environment 对象
-1. 通过判断[webApplicationType](#112-判断应用类型)分别创建不同的Environment对象
-2. 设置Environment的转换器 ConvertionService,将命令行传递参数新建PropertySource 设置到最优先级
-3. 
 
-### 1.2.4 打印 Banner
+   @Override
+   public Iterator<ConfigurationPropertySource> iterator() {
+       //source持有普通 ProppertySource 通过adatpt 增强为ConfigurationPropertySource
+       return new SourcesIterator(this.sources.iterator(), this::adapt);
+   }
+}
 
-### 创建ApplicationContext
+static SpringConfigurationPropertySource from(PropertySource<?> source) {
+   Assert.notNull(source, "Source must not be null");
+   // 系统环境变量支持下划线等大小写等解析,并支持-替换_ 普通变量仅支持调用elements.toString
+   PropertyMapper[] mappers = getPropertyMappers(source);
+   if (isFullEnumerable(source)) {
+       // root source 是map的支持
+       return new SpringIterableConfigurationPropertySource((EnumerablePropertySource<?>) source, mappers);
+   }
+   //不是map的
+   return new SpringConfigurationPropertySource(source, mappers);
+}
+```
 
-### 准备ApplicationContext
+1. `ConfigurationPropertySourcesPropertySource` 改写了getProperty 使其能从自身的source内部迭代出 `ConfigurationPropertySource`元素,并调用获得ConfigurationProperty value 的功能
 
-### 执行Refresh
+```java
+//把简单的类似 spring.application.name 转化成elements 对象,elements对象是element的封装 支持 - 中括号等 在返回包装的ConfigurationPropertyName
+static ConfigurationPropertyName of(CharSequence name, boolean returnNullIfInvalid) {
+ Elements elements = elementsOf(name, returnNullIfInvalid);
+ return (elements != null) ? new ConfigurationPropertyName(elements) : null;
+}
+```
 
-### 发布started 事件
+```java
+public Object getProperty(String name) {
+ // 把原先访问getProperty 转向更复杂的findConfigurationProperty
+ ConfigurationProperty configurationProperty = findConfigurationProperty(name);
+ return (configurationProperty != null) ? configurationProperty.getValue() : null;
+}
+private ConfigurationProperty findConfigurationProperty(ConfigurationPropertyName name) {
+    if (name == null) {
+        return null;
+    }
+    //从上一步已经解析完成的name中
 
-### 调用Runner
+    for (ConfigurationPropertySource configurationPropertySource : getSource()) {
+        ConfigurationProperty configurationProperty = configurationPropertySource.getConfigurationProperty(name);
+        if (configurationProperty != null) {
+            return configurationProperty;
+        }
+    }
+    return null;
+}
+
+// SpringConfigurationPropertySource root source 不是map
+public ConfigurationProperty getConfigurationProperty(ConfigurationPropertyName name) {
+    if (name == null) {
+        return null;
+    }
+    ConfigurationProperty configurationProperty = super.getConfigurationProperty(name);
+    if (configurationProperty != null) {
+        return configurationProperty;
+    }
+    for (String candidate : getMappings().getMapped(name)) {
+        Object value = getPropertySource().getProperty(candidate);
+        if (value != null) {
+            //找到最来源的propertySource
+            Origin origin = PropertySourceOrigin.get(getPropertySource(), candidate);
+            return ConfigurationProperty.of(name, value, origin);
+        }
+    }
+    return null;
+}
+
+
+//  SpringIterableConfigurationPropertySource root source 是map的
+public ConfigurationProperty getConfigurationProperty(ConfigurationPropertyName name) {
+    if (name == null) {
+        return null;
+    }
+    // 先调用上面方法看是否能查询到结果
+    ConfigurationProperty configurationProperty = super.getConfigurationProperty(name);
+    if (configurationProperty != null) {
+        return configurationProperty;
+    }
+    for (String candidate : getMappings().getMapped(name)) {
+        Object value = getPropertySource().getProperty(candidate);
+        if (value != null) {
+            // 找到最开始来源的propertySource
+            Origin origin = PropertySourceOrigin.get(getPropertySource(), candidate);
+            return ConfigurationProperty.of(name, value, origin);
+        }
+    }
+    return null;
+}
+```
+
+### environPostProcessor
