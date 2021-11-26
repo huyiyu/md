@@ -6,11 +6,15 @@
 
 ## 1.1 springApplication 对象创建
 
-> spring Application对象的创建默认需要六个参数,创建SpringApplication 本质上是填充这六个参数
+> spring Application对象的创建默认需要七个参数,创建SpringApplication 本质上是填充这七个参数
 
-```java
-
-```
+* resourceLoader: 资源加载器
+* primarySources: 启动时传入的class**列表**,其中一个必须带有@SpringApplication 注解
+* webApplicationType: 应用类型 servlet 或 webFlux
+* bootstrappers: 从SPI加载的 bootstrappers 列表
+* initializers: 从SPI加载的 Applicationinitializers 列表
+* listeners: 从SPI加载的 ApplicationListener 列表
+* mainClass: 写main 方法的类
 
 ### 1.1.1 缓存启动的Class 参数
 
@@ -36,8 +40,7 @@ primarySources 保存run方法第一个参数,具体作用如果有阅读过Spri
 NONE,
 SERVLET,
 REACTIVE;
-private static final String[] SERVLET_INDICATOR_CLASSES = { "javax.servlet.Servlet",
-        "org.springframework.web.context.ConfigurableWebApplicationContext" };
+private static final String[] SERVLET_INDICATOR_CLASSES = { "javax.servlet.Servlet","org.springframework.web.context.ConfigurableWebApplicationContext" };
 private static final String WEBMVC_INDICATOR_CLASS = "org.springframework.web.servlet.DispatcherServlet";
 private static final String WEBFLUX_INDICATOR_CLASS = "org.springframework.web.reactive.DispatcherHandler";
 private static final String JERSEY_INDICATOR_CLASS = "org.glassfish.jersey.servlet.ServletContainer";
@@ -158,18 +161,28 @@ private Class<?> deduceMainApplicationClass() {
 
 ### 1.2.3 创建 Environment 对象
 
-1. 通过判断[webApplicationType](#112-判断应用类型)分别创建不同的Environment对象
-2. 设置Environment的转换器 ConvertionService,将命令行传递参数新建PropertySource(命令行参数传递的规则是--key=value,可通过查阅源码知道) 设置到最优先级
-3. ***没有强迫症可以不看,只记住结论!!!*** 将现有的Environment的PropertySource **列表容器** 包装起来提供一个能将 `.`,`-`转换成 `_`去匹配原有PropertySource 的功能,关注[附录:attach 解析](#attach-environment-解析)
-4. 发布environment 准备好的消息,参照[事件矩阵图](#事件矩阵图)
-5. 将environment 中名称为 `default`的propertySource 移动到最后面
-6.
+1. 通过判断[webApplicationType](#112-判断应用类型)分别创建不同的Environment对象,通常创建的是Servlet 类型的Environment,所以默认有 `[servletConfigInitParams,servletContextInitParams,systemProperties,systemEnvironment]`四个
+2. 设置Environment的转换器 ConvertionService,
+3. 将命令行传递参数新建PropertySource(命令行参数传递的规则是--key=value) 设置到最优先级此时如果有命令行参数变成五个 `[commandLineArgs,servletConfigInitParams,servletContextInitParams,systemProperties,systemEnvironment]`
+4. ***没有强迫症可以不看,只记住结论!!!*** 将现有的Environment的PropertySource **列表容器** 包装起来提供一个能将 `.`,`-`转换成 `_`去匹配原有PropertySource 的功能,关注[附录:attach 解析](#attach-environment-解析)此时propertySources 六个 `[configurationProperties,commandLineArgs,servletConfigInitParams,servletContextInitParams,systemProperties,systemEnvironment,random]`
+5. 发布environment 准备好的消息,参照[事件矩阵图](#事件矩阵图)
+6. 将environment 中名称为 `default`的propertySource 移动到最后面,默认没有
+7. 配置可选的profile 默认没有
+8. 将`spring.main` 环境变量相关值赋给springApplication
+9.  尝试将当前environment根据WebApplicationType 转化成对应类型
+10. 尝试再一次执行attach,如果attach过会重新attach
 
 ### 1.2.4 打印 Banner
-
+1. 判断BannerMode 是否是开启状态 值从环境变量里面读有 OFF CONSOLE LOG 三种配置
+2. Banner 可以有多个,可以支持图片,文本 取名Banner.jpg|gif|jpeg|txt 或配置环境变量spring.banner.location 和 spring.banner.image.location
+3. 有 failBackBanner 优先返回
+4. 调用 Banner print 方法返回(各个子类去实现)
 ### 创建ApplicationContext
-
+> 根据[webApplicationType](#112-判断应用类型)创建对应的上下文,一般类型为 AnnotationConfigServletWebServerApplicationContext
 ### 准备ApplicationContext
+1. 设置 environment 对象,ConversionService 对象
+2. 将从SPI加载缓存在springApplication 的Initializer设置给ApplicationContext初始化,详看附录[initializer](#initializer-解析)
+3. 
 
 ### 执行Refresh
 
@@ -182,14 +195,14 @@ private Class<?> deduceMainApplicationClass() {
 ### 事件矩阵图
 
 |     事件\监听器     | EnvironmentPostProcessor | `AnsiOutput` | `Logging` | `BackgroundPreinitializer` | `Delegating` | `ParentContextCloser` | `ClearCaches` | `FileEncoding` | `LiquibaseServiceLocator` |
-| :-----------------: | :----------------------: | :------------: | :---------- | ---------------------------- | -------------- | :---------------------: | :-------------: | :--------------: | :-------------------------: |
-|      starting      |            -            |       -       | 1           | 2                            | 3              |            -            |        -        |        -        |              4              |
-| environmentPrepared |            1            |       2       | 3           | 4                            | 5              |            -            |        -        |        6        |              -              |
-|   contextPrepared   |                         |               |             |                              |                |                         |                 |                 |                             |
-|    contextLoaded    |                         |               |             |                              |                |                         |                 |                 |                             |
-|       started       |                         |               |             |                              |                |                         |                 |                 |                             |
-|       running       |                         |               |             |                              |                |                         |                 |                 |                             |
-|       failed       |                         |               |             |                              |                |                         |                 |                 |                            |
+| :-----------------: | :----------------------: | :------------: | :---------: | :--------------------------: | :------------: | :---------------------: | :-------------: | :--------------: | :-------------------------: |
+|      starting      |            -            |       -       |      1      |              2              |       3       |            -            |        -        |        -        |              4              |
+| environmentPrepared |            1            |       2       |      3      |              4              |       5       |            -            |        -        |        6        |              -              |
+|   contextPrepared   |                         |               |             |                             |               |                         |                 |                 |                             |
+|    contextLoaded    |                         |               |             |                             |               |                         |                 |                 |                             |
+|       started       |                         |               |             |                             |               |                         |                 |                 |                             |
+|       running       |                         |               |             |                             |               |                         |                 |                 |                             |
+|       failed       |                         |               |             |                             |               |                         |                 |                 |                             |
 
 #### starting
 
@@ -199,9 +212,12 @@ private Class<?> deduceMainApplicationClass() {
 4. ~~LiquibaseServiceLocatorApplicationListener: 无逻辑 没有使用LiquiBase~~
 
 #### environmentPrepare
-··
-1. EnvironmentPostProcessorApplicationListener-environmentPrepare:  创建从[spring boot SPI](#113-spring-boot-spi-加载流程)加载的EnvironmentPostProcessor 并全量执行postProcessEnvironment
-2.
+1. EnvironmentPostProcessorApplicationListener:  创建从[spring boot SPI](#113-spring-boot-spi-加载流程)加载的EnvironmentPostProcessor 并全量执行postProcessEnvironment,参照[environmentPostProcessor](#environpostprocessor)
+2. AnsiOutputApplicationListener:控制台彩色日志输出,`spring.output.ansi.enabled`为 always 必开启,为detect 尝试判断 `spring.output.ansi.console-available` 为true 开启,否则都不开启，有意思的是IDEA的spring Boot模板 会在SystemProperties里修改这个默认值为ALWAYS 普通MAIN 方法是
+3. LoggingApplicationListener: 初始化日志相关的环境变量,注册关闭时候的 ShutDownHook
+4. BackgroundPreinitializer: 提供提前初始化 DefaultFormattingConversionService Validator AllEncompassingFormHttpMessageConverter ObjectMapper Charset
+5. DelegatingApplicationListener:读取环境变量中的 `context.listener.classes` 列表,反射生成对象,new 一个对象,当读取到环境变量准备事件发布时同时发给 `context.listener.classes` 的Listener
+6. FileEncodingApplicationListener: 当环境变量 `spring.mandatory-file-encoding` 不等于系统属性`file.encoding`时异常结束这个应用,默认不写不校验
 
 ### 发布事件逻辑
 
@@ -376,3 +392,20 @@ public ConfigurationProperty getConfigurationProperty(ConfigurationPropertyName 
 ```
 
 ### environPostProcessor
+
+* ***RandomValuePropertySourceEnvironmentPostProcessor***: 为 environment 新增一个 randomPropertySource 到最后,该 propertySource 支持随机数生成如random.int,random.uuid 此时environement 的propertySource 变成七个 `[configurationProperties,commandLineArgs,servletConfigInitParams,servletContextInitParams,systemProperties,systemEnvironment,random]`
+* ***SystemEnvironmentPropertySourceEnvironmentPostProcessor***: 将系统环境变量 `systemEnvironment` 替换成OriginAwareSystemEnvironmentPropertySource
+* ***SpringApplicationJsonEnvironmentPostProcessor***: 检查系统内部配置 SPRING_APPLICATION_JSON 或 spring.application.json key 的value  序列化成Map 然后作为一个PropertySource放入Environment
+* ***CloudFoundryVcapEnvironmentPostProcessor***: 如果处于 `CloudFoundryVcapEnvironmentPostProcessor` 环境下,新增vcap propertySource
+* ***ConfigDataEnvironmentPostProcessor***: 注册 Binder，加载application.properties 和 application.yml 文件
+* ***DebugAgentEnvironmentPostProcessor***: 当存在 reactor.tools.agent.ReactorDebugAgent 时执行它的init 方法
+### initializer-解析
+* **DelegatingApplicationContextInitializer**: 从环境变量`context.initializer.classes`中获取更多的initializer 执行初始化
+* **SharedMetadataReaderFactoryContextInitializer**:新增一个 CachingMetadataReaderFactoryPostProcessor 是 BeanDefinitionRegistryRegistryPostProcessor,这个流程会影响 [refresh](#执行refresh)过程中的InvokeBeanFactoryPostProcessor,可在refresh 环节继续分析
+* **ContextIdApplicationContextInitializer**:生成ContextId对象并注册到Spring容器中,名称取环境变量`spring.application.name` 没有设置成application
+* **ConfigurationWarningsApplicationContextInitializer**:新增一个 ConfigurationWarningsPostProcessor 是 BeanDefinitionRegistryRegistryPostProcessor,这个流程会影响 [refresh](#执行refresh)过程中的InvokeBeanFactoryPostProcessor,可在refresh 环节继续分析
+* **RSocketPortInfoApplicationContextInitializer**: 添加一个RSocket相关的ApplicationListener RSocket启动时设置端口号到环境变量的`server.ports`
+* **ServerPortInfoApplicationContextInitializer**: 把自己记录到ApplicationListener 当 WebServer 启动时记录端口到`server.ports`
+* **ConditionEvaluationReportLoggingListener**: 添加一个 ApplicationListener 
+
+tigq:q
