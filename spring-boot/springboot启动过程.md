@@ -115,7 +115,7 @@ private static Map<String, List<String>> loadSpringFactories(ClassLoader classLo
 
 * bootstrappers:
 * listeners: spring 提供的事件监听器,在spring boot 中被改造成能监听 spring boot 事件
-* initializer：
+* initializer：spring boot 提供的在refreshApplication 之前的扩展,实现了该接口可以在prepareRefresh之前执行
 
 ### 1.1.4 获得启动类
 
@@ -168,27 +168,42 @@ private Class<?> deduceMainApplicationClass() {
 5. 发布environment 准备好的消息,参照[事件矩阵图](#事件矩阵图)
 6. 将environment 中名称为 `default`的propertySource 移动到最后面,默认没有
 7. 配置可选的profile 默认没有
-8. 将`spring.main` 环境变量相关值赋给springApplication
-9.  尝试将当前environment根据WebApplicationType 转化成对应类型
+8. 将 `spring.main` 环境变量相关值赋给springApplication
+9. 尝试将当前environment根据WebApplicationType 转化成对应类型
 10. 尝试再一次执行attach,如果attach过会重新attach
 
 ### 1.2.4 打印 Banner
+
 1. 判断BannerMode 是否是开启状态 值从环境变量里面读有 OFF CONSOLE LOG 三种配置
 2. Banner 可以有多个,可以支持图片,文本 取名Banner.jpg|gif|jpeg|txt 或配置环境变量spring.banner.location 和 spring.banner.image.location
 3. 有 failBackBanner 优先返回
 4. 调用 Banner print 方法返回(各个子类去实现)
+
 ### 创建ApplicationContext
+
 > 根据[webApplicationType](#112-判断应用类型)创建对应的上下文,一般类型为 AnnotationConfigServletWebServerApplicationContext
+
 ### 准备ApplicationContext
+
 1. 设置 environment 对象,ConversionService 对象
 2. 将从SPI加载缓存在springApplication 的Initializer设置给ApplicationContext初始化,详看附录[initializer](#initializer-解析)
-3. 
+3. 发布contextPrepared 事件,参照[事件矩阵图](#事件矩阵图)
+4. bootstrapContext 发布关闭事件,参照[事件矩阵图](#事件矩阵图)
+5. 打印启动信息和profiles 信息
+6. 向Spring容器注册启动参数单例
+7. 向spring容器注册打印Banner单例
+8. 默认设置不允许BeanDefinition 覆盖
+9. 判断ApplicationContext类型,提供多种BeanDefinitionReader,解析Main-Class
+10. 发布contextLoaded事件,参见附录[事件矩阵图](#事件矩阵图)
 
 ### 执行Refresh
+
+参见[springboot Refresh 过程](./)
 
 ### 发布started 事件
 
 ### 调用Runner
+
 
 ## 附录
 
@@ -198,9 +213,9 @@ private Class<?> deduceMainApplicationClass() {
 | :-----------------: | :----------------------: | :------------: | :---------: | :--------------------------: | :------------: | :---------------------: | :-------------: | :--------------: | :-------------------------: |
 |      starting      |            -            |       -       |      1      |              2              |       3       |            -            |        -        |        -        |              4              |
 | environmentPrepared |            1            |       2       |      3      |              4              |       5       |            -            |        -        |        6        |              -              |
-|   contextPrepared   |                         |               |             |                             |               |                         |                 |                 |                             |
-|    contextLoaded    |                         |               |             |                             |               |                         |                 |                 |                             |
-|       started       |                         |               |             |                             |               |                         |                 |                 |                             |
+|   contextPrepared   |            -            |       -       |      -      |              1              |       2       |            -            |        -        |        -        |              -              |
+|    contextLoaded    |            1            |       -       |      2      |              3              |       4       |            -            |        -        |        -        |              -              |
+|       started       |            -            |       -       |      1      |              2              |       -       |            -            |        -        |        -        |              -              |
 |       running       |                         |               |             |                             |               |                         |                 |                 |                             |
 |       failed       |                         |               |             |                             |               |                         |                 |                 |                             |
 
@@ -211,13 +226,42 @@ private Class<?> deduceMainApplicationClass() {
 3. ~~DelegatingApplicationListener: 无逻辑 因为事件类型不属于 DelegatingApplicationListener~~
 4. ~~LiquibaseServiceLocatorApplicationListener: 无逻辑 没有使用LiquiBase~~
 
-#### environmentPrepare
+#### environmentPrepared
+
 1. EnvironmentPostProcessorApplicationListener:  创建从[spring boot SPI](#113-spring-boot-spi-加载流程)加载的EnvironmentPostProcessor 并全量执行postProcessEnvironment,参照[environmentPostProcessor](#environpostprocessor)
-2. AnsiOutputApplicationListener:控制台彩色日志输出,`spring.output.ansi.enabled`为 always 必开启,为detect 尝试判断 `spring.output.ansi.console-available` 为true 开启,否则都不开启，有意思的是IDEA的spring Boot模板 会在SystemProperties里修改这个默认值为ALWAYS 普通MAIN 方法是
+2. AnsiOutputApplicationListener:控制台彩色日志输出,`spring.output.ansi.enabled`为 ALWAYS 必开启,为 DETECT 尝试判断 `spring.output.ansi.console-available` 为true 开启,否则都不开启，有意思的是IDEA的spring Boot模板 会在SystemProperties里修改这个默认值为ALWAYS 普通MAIN 方法是DETECT
 3. LoggingApplicationListener: 初始化日志相关的环境变量,注册关闭时候的 ShutDownHook
 4. BackgroundPreinitializer: 提供提前初始化 DefaultFormattingConversionService Validator AllEncompassingFormHttpMessageConverter ObjectMapper Charset
 5. DelegatingApplicationListener:读取环境变量中的 `context.listener.classes` 列表,反射生成对象,new 一个对象,当读取到环境变量准备事件发布时同时发给 `context.listener.classes` 的Listener
-6. FileEncodingApplicationListener: 当环境变量 `spring.mandatory-file-encoding` 不等于系统属性`file.encoding`时异常结束这个应用,默认不写不校验
+6. FileEncodingApplicationListener: 当环境变量 `spring.mandatory-file-encoding` 不等于系统属性 `file.encoding`时异常结束这个应用,默认不写不校验
+
+#### contextPrepared
+
+1. ~~`BackgroundPreinitializer`:无逻辑 因为事件类型匹配不上~~
+2. ~~DelegatingApplicationListener: 无逻辑 因为事件类型不属于 DelegatingApplicationListener~~
+
+#### BootstrapContextClosed
+
+没有监听器
+
+#### contextLoaded
+
+> 将从 spring.factories 中加载到的ApplicationListener 放入当前ApplicationContext,并发布contextLoaded事件
+
+1. EnvironmentPostProcessorApplicationListener:
+2. LoggingApplicationListener:向spring注册LoggingSystem实例,向spring 注册LoggerGroup实例
+3. ~~BackgroundPreinitializer: 没有业务逻辑,因为发布事件类型不属于 ApplicationEnvironmentPreparedEvent 或 ApplicationReadyEvent 或 ApplicationFailedEvent~~
+4. ~~DelegatingApplicationListener:没有业务逻辑,因为 `context.listener.classes ` 没有内容~~
+
+#### started
+
+1. ~~`BackgroundPreinitializer`:无逻辑 因为事件类型匹配不上~~
+2. ~~DelegatingApplicationListener:没有业务逻辑,因为 `context.listener.classes ` 没有内容~~
+
+#### running
+
+
+#### failed
 
 ### 发布事件逻辑
 
@@ -399,13 +443,13 @@ public ConfigurationProperty getConfigurationProperty(ConfigurationPropertyName 
 * ***CloudFoundryVcapEnvironmentPostProcessor***: 如果处于 `CloudFoundryVcapEnvironmentPostProcessor` 环境下,新增vcap propertySource
 * ***ConfigDataEnvironmentPostProcessor***: 注册 Binder，加载application.properties 和 application.yml 文件
 * ***DebugAgentEnvironmentPostProcessor***: 当存在 reactor.tools.agent.ReactorDebugAgent 时执行它的init 方法
-### initializer-解析
-* **DelegatingApplicationContextInitializer**: 从环境变量`context.initializer.classes`中获取更多的initializer 执行初始化
-* **SharedMetadataReaderFactoryContextInitializer**:新增一个 CachingMetadataReaderFactoryPostProcessor 是 BeanDefinitionRegistryRegistryPostProcessor,这个流程会影响 [refresh](#执行refresh)过程中的InvokeBeanFactoryPostProcessor,可在refresh 环节继续分析
-* **ContextIdApplicationContextInitializer**:生成ContextId对象并注册到Spring容器中,名称取环境变量`spring.application.name` 没有设置成application
-* **ConfigurationWarningsApplicationContextInitializer**:新增一个 ConfigurationWarningsPostProcessor 是 BeanDefinitionRegistryRegistryPostProcessor,这个流程会影响 [refresh](#执行refresh)过程中的InvokeBeanFactoryPostProcessor,可在refresh 环节继续分析
-* **RSocketPortInfoApplicationContextInitializer**: 添加一个RSocket相关的ApplicationListener RSocket启动时设置端口号到环境变量的`server.ports`
-* **ServerPortInfoApplicationContextInitializer**: 把自己记录到ApplicationListener 当 WebServer 启动时记录端口到`server.ports`
-* **ConditionEvaluationReportLoggingListener**: 添加一个 ApplicationListener 
 
-tigq:q
+### initializer-解析
+
+* **DelegatingApplicationContextInitializer**: 从环境变量 `context.initializer.classes`中获取更多的initializer 执行初始化
+* **SharedMetadataReaderFactoryContextInitializer**:新增一个 CachingMetadataReaderFactoryPostProcessor 是 BeanDefinitionRegistryRegistryPostProcessor,这个流程会影响 [refresh](#执行refresh)过程中的InvokeBeanFactoryPostProcessor,可在refresh 环节继续分析
+* **ContextIdApplicationContextInitializer**:生成ContextId对象并注册到Spring容器中,名称取环境变量 `spring.application.name` 没有设置成application
+* **ConfigurationWarningsApplicationContextInitializer**:新增一个 ConfigurationWarningsPostProcessor 是 BeanDefinitionRegistryRegistryPostProcessor,这个流程会影响 [refresh](#执行refresh)过程中的InvokeBeanFactoryPostProcessor,可在refresh 环节继续分析
+* **RSocketPortInfoApplicationContextInitializer**: 添加一个RSocket相关的ApplicationListener RSocket启动时设置端口号到环境变量的 `server.ports`
+* **ServerPortInfoApplicationContextInitializer**: 把自己记录到ApplicationListener 当 WebServer 启动时记录端口到 `server.ports`
+* **ConditionEvaluationReportLoggingListener**: 添加一个 ApplicationListener，用于打印匹配通过的条件注解
