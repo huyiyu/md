@@ -198,7 +198,7 @@ private Class<?> deduceMainApplicationClass() {
 
 ### 执行Refresh
 
-参见[springboot Refresh 过程](./)
+参见[springboot Refresh 过程](./springboot%20Refresh%20过程.md)
 
 ### 发布started 事件
 
