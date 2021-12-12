@@ -1,0 +1,16 @@
+@startuml
+@startmindmap
+* Bootstrap 启动
+** 设置 CATALINA_BASE 和 CATALINA_HOME
+** 初始化 Bootstrap 
+*** 从 catalina.properties初始化类加载器
+**** common.loader
+**** catalina.loader
+**** shared.loader
+*** 使用 catalina.loader 初始化类(这个过程会执行静态代码块)
+*** 创建 Catalina 对象 设置其parentClassLoader值为catalina.loader
+*** 反射调用 Catalina 的load方法
+
+
+@endmindmap
+@enduml
