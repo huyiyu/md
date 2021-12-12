@@ -78,64 +78,17 @@
 ### @SpringBootApplication 注解分析
 > @SpringBootApplication 由多个注解构成,关键注解 @SpringBootConfiguration(本质上与Configuration完全相同),@ComponentScan(包扫描),@EnableAutoConfiguration(和@Import 解析相关),其中包含的比较重要的注解@EnableAutoConfiguration,该注解内部Import了`AutoConfigurationImportSelector`和`AutoConfigurationPackages.Registrar`。AutoConfigurationImportSelector,是一个DeferImportSelector,并且有自己的group,其调用逻辑为
 
+![AutoConfigurationImportSelector](./autoConfigurationImportSelector.png)
+
+1. **handler**:包装当前ConfigurationClass 和DeferImportSelector 为Holder存储在Handler的Holders列表中等待调用
+2. **register**: 对内部Holders列表进行分组,DeferImportSelector方法返回的getImportGroup结果相同的放入同一个Grouping
+3. **createGroup**:创建Group对象,Group持有的是相同Group对象的Holders列表，如果getImportGroup返回为空会使用默认分组,添加Grouping
+4. **getcandidateFilter**:获取相同分组的所有过滤器做并集
+5. **process**:获取相同Grouping中的过滤器并集合并,grouping使用Group对内部的Holders持有的DeferImportSelector列表做`process`处理(默认分组调用SelectImport方法),汇总得到Entry列表
+6. **processImport**通过entry获得调用参数,再一次调用processImport,这个过程类似普通的ImportSelector
 ```java
-private class DeferredImportSelectorGroupingHandler {
-  /**
-   * key:如果DeferImportSelector的ImportGroup返回空,使用Holder作为类型,否则使用Group作为类型
-   * value: 是一个Grouping 对象,用于进一步包装Group对象
-   */
-  private final Map<Object, DeferredImportSelectorGrouping> groupings = new LinkedHashMap<>();
 
-  private final Map<AnnotationMetadata, ConfigurationClass> configurationClasses = new HashMap<>();
 
-  public void register(DeferredImportSelectorHolder deferredImport) {
-    Class<? extends Group> group = deferredImport.getImportSelector().getImportGroup();
-    DeferredImportSelectorGrouping grouping = this.groupings.computeIfAbsent(
-        (group != null ? group : deferredImport),
-        key -> new DeferredImportSelectorGrouping(createGroup(group)));
-    // 一个grouping 需要group 对象和DeferImportSelector 和 ConfigurationClass
-    grouping.add(deferredImport);
-    this.configurationClasses.put(deferredImport.getConfigurationClass().getMetadata(),
-        deferredImport.getConfigurationClass());
-  }
-
-  public void processGroupImports() {
-    for (DeferredImportSelectorGrouping grouping : this.groupings.values()) {
-      //grouping 方法本质上调用Holder列表的所有DeferImportSelector的候选者过滤器,并对过滤器取并集
-      Predicate<String> exclusionFilter = grouping.getCandidateFilter();
-      // getImport方法会调用Group的process方法对内部DeferImportSelector做统一处理,默认的处理是执行SelectImport
-      // spring boot 提供的方法不执行这个方法
-      grouping.getImports().forEach(entry -> {
-        ConfigurationClass configurationClass = this.configurationClasses.get(entry.getMetadata());
-        try {
-          processImports(configurationClass, asSourceClass(configurationClass, exclusionFilter),
-              Collections.singleton(asSourceClass(entry.getImportClassName(), exclusionFilter)),
-              exclusionFilter, false);
-        }
-        catch (BeanDefinitionStoreException ex) {
-          throw ex;
-        }
-        catch (Throwable ex) {
-          throw new BeanDefinitionStoreException(
-              "Failed to process import candidates for configuration class [" +
-                  configurationClass.getMetadata().getClassName() + "]", ex);
-        }
-      });
-    }
-  }
-
-  /**
-   * 通过反射创建group 并执行 aware 方法
-   * @param type group 的class 可以为空,如果为空用默认类型替代
-   */
-  private Group createGroup(@Nullable Class<? extends Group> type) {
-    Class<? extends Group> effectiveType = (type != null ? type : DefaultDeferredImportSelectorGroup.class);
-    return ParserStrategyUtils.instantiateClass(effectiveType, Group.class,
-        ConfigurationClassParser.this.environment,
-        ConfigurationClassParser.this.resourceLoader,
-        ConfigurationClassParser.this.registry);
-  }
-}
 
 ```
 

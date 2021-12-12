@@ -1,0 +1,11 @@
+@startuml
+DeferImportSelector->DeferredImportSelectorHandler:handle
+DeferImportSelectorHolder->DeferredImportSelectorHandler:register
+AutoConfigurationGroup->Grouping:createGroup
+DeferImportSelectorHolder->Grouping:getCandidateFilter merge use 
+Grouping->DeferImportSelector: merge candidateFilter use or
+DeferredImportSelectorHandler->getng:getImports
+Grouping->AutoConfigurationGroup:process
+AutoConfigurationGroup->DeferImportSelector:process
+AutoConfigurationGroup->AutoConfigurationGroup:selectImport
+@enduml
