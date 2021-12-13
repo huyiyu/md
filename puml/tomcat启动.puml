@@ -1,16 +1,50 @@
 @startuml
 @startmindmap
-* Bootstrap 启动
+* Bootstrap start
 ** 设置 CATALINA_BASE 和 CATALINA_HOME
 ** 初始化 Bootstrap 
 *** 从 catalina.properties初始化类加载器
 **** common.loader
 **** catalina.loader
 **** shared.loader
-*** 使用 catalina.loader 初始化类(这个过程会执行静态代码块)
+*** 使用 catalina.loader 初始化类
 *** 创建 Catalina 对象 设置其parentClassLoader值为catalina.loader
-*** 反射调用 Catalina 的load方法
-
-
+**  Catalina load
+*** 设置JNDI属性
+*** 使用Digester解析server.xml 并创建
+*** 增强系统输入输出流
+*** server 初始化
+**** rver i INITIALIZING alizing
+**** 执行server初始化
+***** server注册 JMX 
+***** 初始化 utilityExecutor 线程池
+***** JMX 注册 utilityExecutor
+***** JMX 注册 StringCache
+***** JMX 注册 MBeanFactory
+***** globalNamingResources 执行初始化
+***** 尝试加载 urlClassLoader 的包
+***** 执行 service 列表初始化
+****** service INITIALIZING 事件
+****** 执行service初始化
+******* service 注册 JMX
+******* engine 初始化
+******** engine INITIALIZING 
+******** 执行 engine 初始化
+******** engine INITIALIZED
+******* executor 初始化
+******* mapperListenr 初始化
+******* connector 初始化
+******** connector INITIALIZING
+******** 执行 protocolHandler 初始化
+******** connector INITIALIZED 事件  
+****** service 初始化完毕事件
+**** server INITIALIZED 事件
+** bootstrap 启动
+*** server STARTING_PREP 
+*** 执行 server 启动
+**** 发布 CONFIGURE_START_EVENT 事件
+*** state失败,执行 stop
+*** state成功,发布STARTED事件
+** bootstrap stop
 @endmindmap
 @enduml
