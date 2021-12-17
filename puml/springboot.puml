@@ -14,7 +14,7 @@
 *** 发布 starting 事件
 *** 加载environment事件
 *** 打印 Banner
-*** 创建 ApplicationConutext 
+*** 创建 ApplicationContext 
 *** 准备 ApplicationContext 
 *** 执行 refresh
 *** 发布 started 事件
