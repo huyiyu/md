@@ -23,6 +23,7 @@
 ***** mapperListenr init
 ***** connector init
 ****** protocolHandler init
+******* endpoint init
 ** bootstrap 启动
 *** server start
 **** globalNamingResources start

@@ -328,7 +328,7 @@ public void init() throws Exception {
         configureUpgradeProtocol(upgradeProtocol);
     }
     super.init();
-    //提供给更新协议当前协议
+    //提供给更新协议当前协议 参见hTTP 2.0 协议配置,
     for (UpgradeProtocol upgradeProtocol : upgradeProtocols) {
         upgradeProtocol.setHttp11Protocol(this);
     }
@@ -365,10 +365,155 @@ public void init() throws Exception {
 #### Endpinit 
 > Endpinit不是lifecycle子类了,有三个实现NIOEndpoint NIO2Endpoint AprEndpoint 从endpoint便是4层协议到七层协议的拆包
 ```java
+// 统一父类的方法
+public final void init() throws Exception {
+    if (bindOnInit) {
+        // 这个方法调用各个子类自己实现的 bind 方法,分为Nio Nio2 apr 的不同实现
+        bindWithCleanup();
+        bindState = BindState.BOUND_ON_INIT;
+    }
+    // 如果端口绑定好了
+    if (this.domain != null) { 
+        // 向JMX 注册 endpoint 对象
+        oname = new ObjectName(domain + ":type=ThreadPool,name=\"" + getName() + "\"");
+        Registry.getRegistry(null, null).registerComponent(this, oname, null);
+        ObjectName socketPropertiesOname = new ObjectName(domain + ":type=SocketProperties,name=\"" + getName() + "\"");
+        // 向 JMX 注册 socketproperties 这个对象包含了socket 的配置信息 
+        socketProperties.setObjectName(socketPropertiesOname);
+        Registry.getRegistry(null, null).registerComponent(socketProperties, socketPropertiesOname, null);
+        // 如果server.xml 配置了 sslHostConfig 相关的内容 也
+        for (SSLHostConfig sslHostConfig : findSslHostConfigs()) {
+            registerJmx(sslHostConfig);
+        }
+    }
+}
+// nio 的实现
+
+
+// nio2 的实现
+public void bind() throws Exception {
+    // Create worker collection
+    if (getExecutor() == null) {
+        createExecutor();
+    }
+    if (getExecutor() instanceof ExecutorService) {
+        threadGroup = AsynchronousChannelGroup.withThreadPool((ExecutorService) getExecutor());
+    }
+    // AsynchronousChannelGroup needs exclusive access to its executor service
+    if (!internalExecutor) {
+        log.warn(sm.getString("endpoint.nio2.exclusiveExecutor"));
+    }
+    serverSock = AsynchronousServerSocketChannel.open(threadGroup);
+    socketProperties.setProperties(serverSock);
+    InetSocketAddress addr = new InetSocketAddress(getAddress(), getPortWithOffset());
+    serverSock.bind(addr, getAcceptCount());
+    // Initialize SSL if needed
+    initialiseSsl();
+}
+// apr 的实现
+public void bind() throws Exception {
+      // Create the root APR memory pool
+      try {
+          rootPool = Pool.create(0);
+      } catch (UnsatisfiedLinkError e) {
+          throw new Exception(sm.getString("endpoint.init.notavail"));
+      }
+
+      // Create the pool for the server socket
+      serverSockPool = Pool.create(rootPool);
+      // Create the APR address that will be bound
+      String addressStr = null;
+      if (getAddress() != null) {
+          addressStr = getAddress().getHostAddress();
+      }
+      int family = Socket.APR_INET;
+      if (Library.APR_HAVE_IPV6) {
+          if (addressStr == null) {
+              if (!OS.IS_BSD) {
+                  family = Socket.APR_UNSPEC;
+              }
+          } else if (addressStr.indexOf(':') >= 0) {
+              family = Socket.APR_UNSPEC;
+          }
+        }
+
+      long inetAddress = Address.info(addressStr, family, getPortWithOffset(), 0, rootPool);
+      // Create the APR server socket
+      serverSock = Socket.create(Address.getInfo(inetAddress).family,
+              Socket.SOCK_STREAM,
+              Socket.APR_PROTO_TCP, rootPool);
+      if (OS.IS_UNIX) {
+          Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
+      }
+      if (Library.APR_HAVE_IPV6) {
+          if (getIpv6v6only()) {
+              Socket.optSet(serverSock, Socket.APR_IPV6_V6ONLY, 1);
+          } else {
+              Socket.optSet(serverSock, Socket.APR_IPV6_V6ONLY, 0);
+          }
+      }
+      // Deal with the firewalls that tend to drop the inactive sockets
+      Socket.optSet(serverSock, Socket.APR_SO_KEEPALIVE, 1);
+      // Bind the server socket
+      int ret = Socket.bind(serverSock, inetAddress);
+      if (ret != 0) {
+          throw new Exception(sm.getString("endpoint.init.bind", "" + ret, Error.strerror(ret)));
+      }
+      // Start listening on the server socket
+      ret = Socket.listen(serverSock, getAcceptCount());
+      if (ret != 0) {
+          throw new Exception(sm.getString("endpoint.init.listen", "" + ret, Error.strerror(ret)));
+      }
+      if (OS.IS_WIN32 || OS.IS_WIN64) {
+          // On Windows set the reuseaddr flag after the bind/listen
+          Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
+      }
+
+      // Enable Sendfile by default if it has not been configured but usage on
+      // systems which don't support it cause major problems
+      if (!useSendFileSet) {
+          setUseSendfileInternal(Library.APR_HAS_SENDFILE);
+      } else if (getUseSendfile() && !Library.APR_HAS_SENDFILE) {
+          setUseSendfileInternal(false);
+      }
+
+      // Delay accepting of new connections until data is available
+      // Only Linux kernels 2.4 + have that implemented
+      // on other platforms this call is noop and will return APR_ENOTIMPL.
+      if (deferAccept) {
+          if (Socket.optSet(serverSock, Socket.APR_TCP_DEFER_ACCEPT, 1) == Status.APR_ENOTIMPL) {
+              deferAccept = false;
+          }
+      }
+
+      // Initialize SSL if needed
+      if (isSSLEnabled()) {
+          for (SSLHostConfig sslHostConfig : sslHostConfigs.values()) {
+              createSSLContext(sslHostConfig);
+          }
+          SSLHostConfig defaultSSLHostConfig = sslHostConfigs.get(getDefaultSSLHostConfigName());
+          if (defaultSSLHostConfig == null) {
+              throw new IllegalArgumentException(sm.getString("endpoint.noSslHostConfig",
+                      getDefaultSSLHostConfigName(), getName()));
+          }
+          Long defaultSSLContext = defaultSSLHostConfig.getOpenSslContext();
+          sslContext = defaultSSLContext.longValue();
+          SSLContext.registerDefault(defaultSSLContext, this);
+
+          // For now, sendfile is not supported with SSL
+          if (getUseSendfile()) {
+              setUseSendfileInternal(false);
+              if (useSendFileSet) {
+                  log.warn(sm.getString("endpoint.apr.noSendfileWithSSL"));
+              }
+          }
+      }
+  }
+
+
+
+
 ```
-
-
-
 ### 启动 server
 
 ### 停止 server
