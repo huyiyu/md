@@ -167,7 +167,7 @@ standardServer:
 ### 初始化 server
 >lifecycle 的初始化模板在本文开头已经介绍过会先将 Server/Service/Engine/Host/connector 的 state 修改为 INITIALIZING 此时向自身持有的 Listener 发布广播,所有Listener 接收广播后执行 lifecycleEvent 方法,接着执行自身实现的 initInternal 方法。执行完成后再次广播,事件名称为INITIALIZING 所以我们面对茫茫代码时要有重点的去看,从上图 YAML 可知大部分组件是没有监听器的,并且监听器的逻辑几乎不影响主流程,所以此处可以考虑只关注这些组件的主流程。而不关注事件发布到底做了啥,笔者把事件发布的内容统统总结到附录里面供大家查看,本节只关注实际实现的重点关心initInternal逻辑
 #### Server 初始化
-> INITISLIZING 阶段会执行versionLoggerListener,AprLifecycleListener,JreMemoryLeakPreventionlListener 逻辑,具体参见附录,INITIALIZED阶段不执行任何 Listener 逻辑。
+> INITISLIZING 阶段会执行versionLoggerListener,AprLifecycleListener,JreMemoryLeakPreventionlListener 逻辑,具体参见[附录](#tomcat-监听器和生命周期对象关系逻辑),INITIALIZED阶段不执行任何 Listener 逻辑。
 > 总结一下逻辑为,向监控平台注册线程池,Server对象,string 缓存,MBeanFactory,加载类加载器绑定的jar 内部的清单文件便于web应用启动验证,触发service 初始化
 ```java
 // 向JMX 注册自身对象
@@ -381,15 +381,57 @@ public final void init() throws Exception {
         // 向 JMX 注册 socketproperties 这个对象包含了socket 的配置信息 
         socketProperties.setObjectName(socketPropertiesOname);
         Registry.getRegistry(null, null).registerComponent(socketProperties, socketPropertiesOname, null);
-        // 如果server.xml 配置了 sslHostConfig 相关的内容 也
+        // 如果server.xml 配置了 sslHostConfig 相关的内容 也注册
         for (SSLHostConfig sslHostConfig : findSslHostConfigs()) {
             registerJmx(sslHostConfig);
         }
     }
 }
-// nio 的实现
-
-
+```
+##### nio 的实现
+```java
+protected void initServerSocket() throws Exception {
+    if (getUseInheritedChannel()) {
+        // Retrieve the channel provided by the OS
+        Channel ic = System.inheritedChannel();
+        if (ic instanceof ServerSocketChannel) {
+            serverSock = (ServerSocketChannel) ic;
+        }
+        if (serverSock == null) {
+            throw new IllegalArgumentException(sm.getString("endpoint.init.bind.inherited"));
+        }
+    } else if (getUnixDomainSocketPath() != null) {
+        SocketAddress sa = JreCompat.getInstance().getUnixDomainSocketAddress(getUnixDomainSocketPath());
+        serverSock = JreCompat.getInstance().openUnixDomainServerSocketChannel();
+        serverSock.bind(sa, getAcceptCount());
+        if (getUnixDomainSocketPathPermissions() != null) {
+            Path path = Paths.get(getUnixDomainSocketPath());
+            Set<PosixFilePermission> permissions =
+                    PosixFilePermissions.fromString(getUnixDomainSocketPathPermissions());
+            if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+                FileAttribute<Set<PosixFilePermission>> attrs = PosixFilePermissions.asFileAttribute(permissions);
+                Files.setAttribute(path, attrs.name(), attrs.value());
+            } else {
+                java.io.File file = path.toFile();
+                if (permissions.contains(PosixFilePermission.OTHERS_READ) && !file.setReadable(true, false)) {
+                    log.warn(sm.getString("endpoint.nio.perms.readFail", file.getPath()));
+                }
+                if (permissions.contains(PosixFilePermission.OTHERS_WRITE) && !file.setWritable(true, false)) {
+                    log.warn(sm.getString("endpoint.nio.perms.writeFail", file.getPath()));
+                }
+            }
+        }
+    } else {
+        serverSock = ServerSocketChannel.open();
+        socketProperties.setProperties(serverSock.socket());
+        InetSocketAddress addr = new InetSocketAddress(getAddress(), getPortWithOffset());
+        serverSock.bind(addr, getAcceptCount());
+    }
+    serverSock.configureBlocking(true); //mimic APR behavior
+}
+```
+##### nio2 的实现
+```java
 // nio2 的实现
 public void bind() throws Exception {
     // Create worker collection
@@ -410,111 +452,364 @@ public void bind() throws Exception {
     // Initialize SSL if needed
     initialiseSsl();
 }
-// apr 的实现
+```
+##### apr 的实现
+```java
 public void bind() throws Exception {
-      // Create the root APR memory pool
-      try {
-          rootPool = Pool.create(0);
-      } catch (UnsatisfiedLinkError e) {
-          throw new Exception(sm.getString("endpoint.init.notavail"));
-      }
+    // Create the root APR memory pool
+    try {
+        rootPool = Pool.create(0);
+    } catch (UnsatisfiedLinkError e) {
+        throw new Exception(sm.getString("endpoint.init.notavail"));
+    }
 
-      // Create the pool for the server socket
-      serverSockPool = Pool.create(rootPool);
-      // Create the APR address that will be bound
-      String addressStr = null;
-      if (getAddress() != null) {
-          addressStr = getAddress().getHostAddress();
-      }
-      int family = Socket.APR_INET;
-      if (Library.APR_HAVE_IPV6) {
-          if (addressStr == null) {
-              if (!OS.IS_BSD) {
-                  family = Socket.APR_UNSPEC;
-              }
-          } else if (addressStr.indexOf(':') >= 0) {
-              family = Socket.APR_UNSPEC;
-          }
+    // Create the pool for the server socket
+    serverSockPool = Pool.create(rootPool);
+    // Create the APR address that will be bound
+    String addressStr = null;
+    if (getAddress() != null) {
+        addressStr = getAddress().getHostAddress();
+    }
+    int family = Socket.APR_INET;
+    if (Library.APR_HAVE_IPV6) {
+        if (addressStr == null) {
+            if (!OS.IS_BSD) {
+                family = Socket.APR_UNSPEC;
+            }
+        } else if (addressStr.indexOf(':') >= 0) {
+            family = Socket.APR_UNSPEC;
         }
+    }
 
-      long inetAddress = Address.info(addressStr, family, getPortWithOffset(), 0, rootPool);
-      // Create the APR server socket
-      serverSock = Socket.create(Address.getInfo(inetAddress).family,
-              Socket.SOCK_STREAM,
-              Socket.APR_PROTO_TCP, rootPool);
-      if (OS.IS_UNIX) {
-          Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
-      }
-      if (Library.APR_HAVE_IPV6) {
-          if (getIpv6v6only()) {
-              Socket.optSet(serverSock, Socket.APR_IPV6_V6ONLY, 1);
-          } else {
-              Socket.optSet(serverSock, Socket.APR_IPV6_V6ONLY, 0);
-          }
-      }
-      // Deal with the firewalls that tend to drop the inactive sockets
-      Socket.optSet(serverSock, Socket.APR_SO_KEEPALIVE, 1);
-      // Bind the server socket
-      int ret = Socket.bind(serverSock, inetAddress);
-      if (ret != 0) {
-          throw new Exception(sm.getString("endpoint.init.bind", "" + ret, Error.strerror(ret)));
-      }
-      // Start listening on the server socket
-      ret = Socket.listen(serverSock, getAcceptCount());
-      if (ret != 0) {
-          throw new Exception(sm.getString("endpoint.init.listen", "" + ret, Error.strerror(ret)));
-      }
-      if (OS.IS_WIN32 || OS.IS_WIN64) {
-          // On Windows set the reuseaddr flag after the bind/listen
-          Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
-      }
+    long inetAddress = Address.info(addressStr, family, getPortWithOffset(), 0, rootPool);
+    // Create the APR server socket
+    serverSock = Socket.create(Address.getInfo(inetAddress).family,
+            Socket.SOCK_STREAM,
+            Socket.APR_PROTO_TCP, rootPool);
+    if (OS.IS_UNIX) {
+        Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
+    }
+    if (Library.APR_HAVE_IPV6) {
+        if (getIpv6v6only()) {
+            Socket.optSet(serverSock, Socket.APR_IPV6_V6ONLY, 1);
+        } else {
+            Socket.optSet(serverSock, Socket.APR_IPV6_V6ONLY, 0);
+        }
+    }
+    // Deal with the firewalls that tend to drop the inactive sockets
+    Socket.optSet(serverSock, Socket.APR_SO_KEEPALIVE, 1);
+    // Bind the server socket
+    int ret = Socket.bind(serverSock, inetAddress);
+    if (ret != 0) {
+        throw new Exception(sm.getString("endpoint.init.bind", "" + ret, Error.strerror(ret)));
+    }
+    // Start listening on the server socket
+    ret = Socket.listen(serverSock, getAcceptCount());
+    if (ret != 0) {
+        throw new Exception(sm.getString("endpoint.init.listen", "" + ret, Error.strerror(ret)));
+    }
+    if (OS.IS_WIN32 || OS.IS_WIN64) {
+        // On Windows set the reuseaddr flag after the bind/listen
+        Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
+    }
 
-      // Enable Sendfile by default if it has not been configured but usage on
-      // systems which don't support it cause major problems
-      if (!useSendFileSet) {
-          setUseSendfileInternal(Library.APR_HAS_SENDFILE);
-      } else if (getUseSendfile() && !Library.APR_HAS_SENDFILE) {
-          setUseSendfileInternal(false);
-      }
+    // Enable Sendfile by default if it has not been configured but usage on
+    // systems which don't support it cause major problems
+    if (!useSendFileSet) {
+        setUseSendfileInternal(Library.APR_HAS_SENDFILE);
+    } else if (getUseSendfile() && !Library.APR_HAS_SENDFILE) {
+        setUseSendfileInternal(false);
+    }
 
-      // Delay accepting of new connections until data is available
-      // Only Linux kernels 2.4 + have that implemented
-      // on other platforms this call is noop and will return APR_ENOTIMPL.
-      if (deferAccept) {
-          if (Socket.optSet(serverSock, Socket.APR_TCP_DEFER_ACCEPT, 1) == Status.APR_ENOTIMPL) {
-              deferAccept = false;
-          }
-      }
+    // Delay accepting of new connections until data is available
+    // Only Linux kernels 2.4 + have that implemented
+    // on other platforms this call is noop and will return APR_ENOTIMPL.
+    if (deferAccept) {
+        if (Socket.optSet(serverSock, Socket.APR_TCP_DEFER_ACCEPT, 1) == Status.APR_ENOTIMPL) {
+            deferAccept = false;
+        }
+    }
 
-      // Initialize SSL if needed
-      if (isSSLEnabled()) {
-          for (SSLHostConfig sslHostConfig : sslHostConfigs.values()) {
-              createSSLContext(sslHostConfig);
-          }
-          SSLHostConfig defaultSSLHostConfig = sslHostConfigs.get(getDefaultSSLHostConfigName());
-          if (defaultSSLHostConfig == null) {
-              throw new IllegalArgumentException(sm.getString("endpoint.noSslHostConfig",
-                      getDefaultSSLHostConfigName(), getName()));
-          }
-          Long defaultSSLContext = defaultSSLHostConfig.getOpenSslContext();
-          sslContext = defaultSSLContext.longValue();
-          SSLContext.registerDefault(defaultSSLContext, this);
+    // Initialize SSL if needed
+    if (isSSLEnabled()) {
+        for (SSLHostConfig sslHostConfig : sslHostConfigs.values()) {
+            createSSLContext(sslHostConfig);
+        }
+        SSLHostConfig defaultSSLHostConfig = sslHostConfigs.get(getDefaultSSLHostConfigName());
+        if (defaultSSLHostConfig == null) {
+            throw new IllegalArgumentException(sm.getString("endpoint.noSslHostConfig",
+                    getDefaultSSLHostConfigName(), getName()));
+        }
+        Long defaultSSLContext = defaultSSLHostConfig.getOpenSslContext();
+        sslContext = defaultSSLContext.longValue();
+        SSLContext.registerDefault(defaultSSLContext, this);
 
-          // For now, sendfile is not supported with SSL
-          if (getUseSendfile()) {
-              setUseSendfileInternal(false);
-              if (useSendFileSet) {
-                  log.warn(sm.getString("endpoint.apr.noSendfileWithSSL"));
-              }
-          }
-      }
-  }
-
-
-
-
+        // For now, sendfile is not supported with SSL
+        if (getUseSendfile()) {
+            setUseSendfileInternal(false);
+            if (useSendFileSet) {
+                log.warn(sm.getString("endpoint.apr.noSendfileWithSSL"));
+            }
+        }
+    }
+}
 ```
 ### 启动 server
+#### server 启动
+> server 启动过程中 STARTING_PREP 阶段触发 ThreadLocalLeakPrevention 添加threadLocal内存泄漏的解决方案,到Engine/Host/Context的 ***containerListeners*** 不是 ***lifecycleListener*** ;STARTING 阶段会为JNDI资源注册JMX对象,
+
+```java
+// 发布 CONFIGURE_START_EVENT 触发NamingContext创建
+fireLifecycleEvent(CONFIGURE_START_EVENT, null);
+// 发布正在启动状态 触发 GlobalResourcesLifecycleListener 将创建的NamingContext 注册到JMX
+setState(LifecycleState.STARTING);
+// 
+globalNamingResources.start();
+// 触发service列表start
+synchronized (servicesLock) {
+    for (Service service : services) {
+        service.start();
+    }
+}
+//   提供一个一分钟执行一次的定时任务,任务执行内容待补充
+if (periodicEventDelay > 0) {
+    monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
+            () -> startPeriodicLifecycleEvent(), 0, 60, TimeUnit.SECONDS);
+}
+```
+#### service 启动
+> service 默认没有listener 无需关注事件发布,只关注startInternal 逻辑为触发 engine/executor/mapperListener/connector 启动
+```java
+protected void startInternal() throws LifecycleException {
+
+    if(log.isInfoEnabled())
+        log.info(sm.getString("standardService.start.name", this.name));
+    // 修改状态不会触发任何Listener 只方便start判断service 是否初始化成功
+    setState(LifecycleState.STARTING);
+    // engine 一定存在 digester 创建的
+    if (engine != null) {
+        synchronized (engine) {
+            // 触发engine 启动
+            engine.start();
+        }
+    }
+    // 默认线程池为空
+    synchronized (executors) {
+        for (Executor executor: executors) {
+            executor.start();
+        }
+    }
+    // 触发mapperListener 启动
+    mapperListener.start();
+    // 触发connector 启动
+    synchronized (connectorsLock) {
+        for (Connector connector: connectors) {
+            if (connector.getState() != LifecycleState.FAILED) {
+                connector.start();
+            }
+        }
+    }
+}
+
+```
+#### engine 启动
+>engine START_PREP 阶段不触发Listener,STARTING 阶段触发日至打印 engine 启动,然后调用父类 containerBase 的startInternal
+```java
+protected synchronized void startInternal() throws LifecycleException {
+    // Start our subordinate components, if any
+    logger = null;
+    getLogger();
+    // 查看server.xml 是否有配置 cluster 相关内容如果有且是 Lifecycle 子类触发 start 默认不会配置 Engine 集群
+    Cluster cluster = getClusterInternal();
+
+    if (cluster instanceof Lifecycle) {
+        ((Lifecycle) cluster).start();
+    }
+    // 触发LockoutRealm start 
+    Realm realm = getRealmInternal();
+    if (realm instanceof Lifecycle) {
+        ((Lifecycle) realm).start();
+    }
+    // 触发所有children start 方法,默认server.xml 配置了Host作为Engine 的children
+    Container children[] = findChildren();
+    List<Future<Void>> results = new ArrayList<>();
+    for (Container child : children) {
+        // 默认 startStopExecutor 是一个假线程池仍然使用当前线程去启动
+        results.add(startStopExecutor.submit(new StartChild(child)));
+    }
+    MultiThrowable multiThrowable = null;
+
+    for (Future<Void> result : results) {
+        try {
+            result.get();
+        } catch (Throwable e) {
+            log.error(sm.getString("containerBase.threadedStartFailed"), e);
+            if (multiThrowable == null) {
+                multiThrowable = new MultiThrowable();
+            }
+            multiThrowable.add(e);
+        }
+
+    }
+    if (multiThrowable != null) {
+        throw new LifecycleException(sm.getString("containerBase.threadedStartFailed"),
+                multiThrowable.getThrowable());
+    }
+
+    // Start the Valves in our pipeline (including the basic), if any
+    if (pipeline instanceof Lifecycle) {
+        ((Lifecycle) pipeline).start();
+    }
+    // HostConfig 在此处监听Starting 事件并部署应用
+    setState(LifecycleState.STARTING);
+
+    // Start our thread
+    if (backgroundProcessorDelay > 0) {
+        monitorFuture = Container.getService(ContainerBase.this).getServer()
+                .getUtilityExecutor().scheduleWithFixedDelay(
+                        new ContainerBackgroundProcessorMonitor(), 0, 60, TimeUnit.SECONDS);
+    }
+}
+
+```
+#### realm 启动
+> 由于realm 在init 阶段没有主动init,此处执行 start 得先执行init 过程,init 过程包含 x509用户名检索 对象创建,触发lockoutRealm start,lockoutRealm start 过程中触发Realms 列表触发各自的start 默认配置了 tomcat-users.xml加载到内存获得 database
+#### host 启动
+> host 从未进行过init 所以 start 之前需要先执行 init, INITIALIZING 阶段不触发Listener,init 阶段主要进行 startStopExecutor 线程池的设置类似 Engine 默认单线程启动,即InlineExecutorService,然后 StandardHost 注册JMX MBean；启动阶段,先发布START_PREP事件,HostConfig 监听该事件检查 server.xml 配置的appBase 和ConfigBase 是不是目录,如果不是打印错误消息,
+```java
+protected synchronized void startInternal() throws LifecycleException {
+    // 获取 errorReportValveClass 属性,该属性可通过server.xml 修改 默认为 ErrorReportValve 全类名
+    String errorValve = getErrorReportValveClass();
+    if ((errorValve != null) && (!errorValve.equals(""))) {
+        try {
+            boolean found = false;
+            // 此时 pipeline 内部有两个阀门,一个是 server.xml 配置记录访问日志的 AccessLogValve,一个是构造方法添加的StandardHostValve 均不是ErrorReportValve
+            Valve[] valves = getPipeline().getValves();
+            for (Valve valve : valves) {
+                if (errorValve.equals(valve.getClass().getName())) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                Valve valve = ErrorReportValve.class.getName().equals(errorValve) ?
+                    new ErrorReportValve() :
+                    (Valve) Class.forName(errorValve).getConstructor().newInstance();
+                // 既然都不是 那么将ErrorReportValve 添加到pipeline 由于此时 state 仍为不可用状态,所以不会执行valve start
+                getPipeline().addValve(valve);
+            }
+        } catch (Throwable t) {
+            ExceptionUtils.handleThrowable(t);
+            log.error(sm.getString(
+                    "standardHost.invalidErrorReportValveClass",
+                    errorValve), t);
+        }
+    }
+    // 此处调用类似ContainerBase 区别在于StandardHost没有Children 于是触发 pipeline 的start 
+    // 最终发布 Host 的Starting 事件 内部调用 deployApps 方法部署应用
+    super.startInternal();
+}
+```
+##### Host-Pipeline 启动
+> Host-Pipeline 从未init 过于是先init执行空方法,HostPipeline 没有Listener 不用关心事件发布 pipeline start 本质上触发Valve 链表的start HostPipeline 默认持有三个Valve AccessLogValve -> ErrorReportValve -> StandardHostValve 其中 AccessLogValve 启动包含了日志打印的几个对象的初始化,其他的Valva 调用start 过程本质啥都没做
+```java
+protected synchronized void startInternal() throws LifecycleException {
+    // 判断first 是否为空 first 一般为首次调用addValve的valve
+    Valve current = first;
+    if (current == null) {
+        //  如果没有使用Basic
+        current = basic;
+    }
+    // 然后按照链表的迭代顺序网next 走 直到next 为空
+    while (current != null) {
+        if (current instanceof Lifecycle)
+            ((Lifecycle) current).start();
+        current = current.getNext();
+    }
+    // 设置pipeline 的状态为 STARTING 
+    setState(LifecycleState.STARTING);
+}
+```
+##### Host 应用部署
+> 当Host 委托ContainerBase 执行Children start 和 Valve start 后 发布Starting 事件,此时触发应用部署
+```java
+protected void deployApps() {
+    // 默认值配置在server.xml 上 为 webapps
+    File appBase = host.getAppBaseFile();
+
+    File configBase = host.getConfigBaseFile();
+    String[] filteredAppPaths = filterAppPaths(appBase.list());
+    // 从 conf/Catalina/localhost/***.xml 读取部署信息部署
+    deployDescriptors(configBase, configBase.list());
+    // 部署war 包
+    deployWARs(appBase, filteredAppPaths);
+    // 部署目录
+    deployDirectories(appBase, filteredAppPaths);
+}
+```
+###### 根据 Context.xml 部署
+// TODO
+###### 部署 war 包
+// TODO
+###### 部署 webapps 目录
+```java
+protected void deployDirectories(File appBase, String[] files) {
+        // 判断传入的appBase 目录(默认为webapps)文件列表是否为空
+        if (files == null) {
+            return;
+        }
+        // 获取设置的 启动和停止线程池,默认为假线程池(串行部署)
+        ExecutorService es = host.getStartStopExecutor();
+        List<Future<?>> results = new ArrayList<>();
+        // 循环 webapps 目录下内容
+        for (String file : files) {
+            // 跳过 META-INF
+            if (file.equalsIgnoreCase("META-INF")) {
+                continue;
+            }
+            // 跳过 WEB-INF
+            if (file.equalsIgnoreCase("WEB-INF")) {
+                continue;
+            }
+            File dir = new File(appBase, file);
+            // 确认 当前File 是一个目录
+            if (dir.isDirectory()) {
+                // 处理部署目录 部署版本 对外路径的信息
+                ContextName cn = new ContextName(file, false);
+                // 尝试添加服务
+                if (tryAddServiced(cn.getName())) {
+                    try {
+                        // 判断部署是否已经存在
+                        if (deploymentExists(cn.getName())) {
+                            removeServiced(cn.getName());
+                            continue;
+                        }
+                        // 调用假线程池提交部署任务
+                        results.add(es.submit(new DeployDirectory(this, cn, dir)));
+                    } catch (Throwable t) {
+                        ExceptionUtils.handleThrowable(t);
+                        removeServiced(cn.getName());
+                        throw t;
+                    }
+                }
+            }
+        }
+
+        for (Future<?> result : results) {
+            try {
+                result.get();
+            } catch (Exception e) {
+                log.error(sm.getString("hostConfig.deployDir.threaded.error"), e);
+            }
+        }
+    }
+```
+
+
+
+
+
+
 
 ### 停止 server
 
@@ -526,10 +821,10 @@ public void bind() throws Exception {
 
 ### tomcat 监听器和生命周期对象关系逻辑
 #### Server
-* **NamingContextListener-CONFIGURE_START_EVENT**: 
+* **NamingContextListener-CONFIGURE_START_EVENT**: 触发创建NamingContext 并加载server.xml 配置的jndi
 * **VersionLogger-INITIALIZING**:  打印 tomcat 版本,命令行参数,系统参数等信息
 * **AprLifecycle-INITIALIZING**:  检查 apr 扩展是否安装,默认不会安装,如果安装了 执行Library.init() 做APR启动工作
-* **JreMemoryLeakPrevention-INITIALIZING**: tomcat 对于类加载器错误使用引起的内存泄漏的解决方案执行 GC.requestLatency 
+* **JreMemoryLeakPrevention-INITIALIZING**: tomcat 对于类加载器错误使用引起的内存泄漏的解决方案执行 GC.requestLatency 会启用Gc Daemon 通知tomcat 做一次Full GC
 * **ThreadLocalLeakPrevention-STARTING_PREP**:为 Engine , Host , Context 注册当前 Listener
 * **GlobalResourcesLifecycle-STARTING**:创建全局的 JNDI 资源,默认配在 server.xml
 * **ThreadLocalLeakPrevention-STOPPING_PREP**:修改当前 serverStoping 值为true
@@ -538,8 +833,14 @@ public void bind() throws Exception {
 * **AprLifecycle-DESTROYED**: 执行 native 方法 Library.terminate() 做一些APR的清理工作
 #### Service
 #### StandardEngine
-* **HostConfig-START_EVENT**: 输出 engine 启动日志
-* **HostConfig-STOP_EVENT**: 输出 engine 结束日志
+* **EngineConfig-START_EVENT**: 输出 engine 启动日志
+* **EngineConfig-STOP_EVENT**: 输出 engine 结束日志
+#### Host
+* **HostConfig-PERIODIC_EVENT**:
+* **HostConfig-BEFORE_START_EVENT**: 检查配置的AppBase 和 ConfigBase 是不是目录，如果不是打印错误日志,没有该目录会自动创建
+* **HostConfig-START_EVENT**: 初始化Host Pipeline 后ContainerBase 发布了 Starting 事件,此时HostConfig 监听到该事件触发应用部署
+* **HostConfig-STOP_EVENT**:
+
 #### mapperListener(空)
 #### connector(空)
 
@@ -550,3 +851,4 @@ public void bind() throws Exception {
 3. [servlet 3.1 中文规范](http://zhanjindong.com/assets/pdf/Servlet3.1-Specification.pdf)
 4. [tomcat 架构解析]() 刘光瑞
 5. [NIO,NIO2,APR 谁更快](https://stackoverflow.com/questions/68810106/fastest-connection-for-tomcat-9-0-in-2021-nio-or-apr)
+6. [维基百科 X509](https://zh.wikipedia.org/wiki/X.509)
