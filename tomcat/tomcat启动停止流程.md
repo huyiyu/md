@@ -731,7 +731,7 @@ protected synchronized void startInternal() throws LifecycleException {
 }
 ```
 ##### Host 应用部署
-> 当Host 委托ContainerBase 执行Children start 和 Valve start 后 发布Starting 事件,此时触发应用部署
+> 当Host 委托ContainerBase 执行Children start 和 Valve start 后 发布Starting 事件,此时触发应用部署,部署流程
 ```java
 protected void deployApps() {
     // 默认值配置在server.xml 上 为 webapps
@@ -804,7 +804,7 @@ protected void deployDirectories(File appBase, String[] files) {
         }
     }
 ```
-
+#### Context 启动
 
 
 
@@ -840,6 +840,23 @@ protected void deployDirectories(File appBase, String[] files) {
 * **HostConfig-BEFORE_START_EVENT**: 检查配置的AppBase 和 ConfigBase 是不是目录，如果不是打印错误日志,没有该目录会自动创建
 * **HostConfig-START_EVENT**: 初始化Host Pipeline 后ContainerBase 发布了 Starting 事件,此时HostConfig 监听到该事件触发应用部署
 * **HostConfig-STOP_EVENT**:
+#### Context
+* **ContextConfig-CONFIGURE_START_EVENT**：
+* **ContextConfig-BEFORE_START_EVENT**：确定 docBase 的值 设置给Context
+* **ContextConfig-AFTER_START_EVENT**：
+* **ContextConfig-CONFIGURE_STOP_EVENT**：
+* **ContextConfig-AFTER_INIT_EVENT**：digester 加载web目录下 context.xml
+* **ContextConfig-AFTER_DESTROY_EVENT**：
+* **MemoryLeakTrackingListener-AFTER-START-EVENT**：
+* **ThreadLocalLeakPrevention-BEFORE_START_EVENT**：
+* **ThreadLocalLeakPrevention-BEFORE_STOP_EVENT**：
+* **ThreadLocalLeakPrevention-AFTER_STOP_EVENT**：
+
+
+
+
+
+
 
 #### mapperListener(空)
 #### connector(空)
