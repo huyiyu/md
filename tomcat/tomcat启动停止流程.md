@@ -164,11 +164,16 @@ standardServer:
       lifecycleListeners: []
       mapperListener:
 ```
+
 ### 初始化 server
->lifecycle 的初始化模板在本文开头已经介绍过会先将 Server/Service/Engine/Host/connector 的 state 修改为 INITIALIZING 此时向自身持有的 Listener 发布广播,所有Listener 接收广播后执行 lifecycleEvent 方法,接着执行自身实现的 initInternal 方法。执行完成后再次广播,事件名称为INITIALIZING 所以我们面对茫茫代码时要有重点的去看,从上图 YAML 可知大部分组件是没有监听器的,并且监听器的逻辑几乎不影响主流程,所以此处可以考虑只关注这些组件的主流程。而不关注事件发布到底做了啥,笔者把事件发布的内容统统总结到附录里面供大家查看,本节只关注实际实现的重点关心initInternal逻辑
+
+> lifecycle 的初始化模板在本文开头已经介绍过会先将 Server/Service/Engine/Host/connector 的 state 修改为 INITIALIZING 此时向自身持有的 Listener 发布广播,所有Listener 接收广播后执行 lifecycleEvent 方法,接着执行自身实现的 initInternal 方法。执行完成后再次广播,事件名称为INITIALIZING 所以我们面对茫茫代码时要有重点的去看,从上图 YAML 可知大部分组件是没有监听器的,并且监听器的逻辑几乎不影响主流程,所以此处可以考虑只关注这些组件的主流程。而不关注事件发布到底做了啥,笔者把事件发布的内容统统总结到附录里面供大家查看,本节只关注实际实现的重点关心initInternal逻辑
+
 #### Server 初始化
+
 > INITISLIZING 阶段会执行versionLoggerListener,AprLifecycleListener,JreMemoryLeakPreventionlListener 逻辑,具体参见[附录](#tomcat-监听器和生命周期对象关系逻辑),INITIALIZED阶段不执行任何 Listener 逻辑。
 > 总结一下逻辑为,向监控平台注册线程池,Server对象,string 缓存,MBeanFactory,加载类加载器绑定的jar 内部的清单文件便于web应用启动验证,触发service 初始化
+
 ```java
 // 向JMX 注册自身对象
 super.initInternal();
@@ -214,8 +219,11 @@ for (Service service : services) {
     service.init();
 }
 ```
+
 #### Service 初始化
+
 > service 初始化默认没有Listener 所以不必关注这些内容
+
 ```java
 // 将standardService 注册到JMX
 super.initInternal();
@@ -241,8 +249,11 @@ synchronized (connectorsLock) {
     }
 }
 ```
-#### Engine 初始化 
-> Engine init事件会打印日志可忽略初始化engine 本质上是判断有没有默认的Realm 如果没有设置为NullRealm(默认 xml 配置了LockoutRealm),除此之外,Engine 会调用父类 ContainerBase 和 LifecycleMBeanBase 的initInternal方法 
+
+#### Engine 初始化
+
+> Engine init事件会打印日志可忽略初始化engine 本质上是判断有没有默认的Realm 如果没有设置为NullRealm(默认 xml 配置了LockoutRealm),除此之外,Engine 会调用父类 ContainerBase 和 LifecycleMBeanBase 的initInternal方法
+
 ```java
 // 判断有没有默认设置的realm 如果没有设置为NullRealm
 Realm configured = super.getRealm();
@@ -251,6 +262,7 @@ if (configured == null) {
     this.setRealm(configured);
 }
 ```
+
 ```java
 private void reconfigureStartStopExecutor(int threads) {
     if (threads == 1) {
@@ -266,10 +278,15 @@ private void reconfigureStartStopExecutor(int threads) {
     }
 }
 ```
+
 #### MapperListener 初始化
->MapperListener没有任何 LifecycleListener,同时 MapperListener 没有重写父类方法调用父类方法将自身注册到 JMX 对象中
+
+> MapperListener没有任何 LifecycleListener,同时 MapperListener 没有重写父类方法调用父类方法将自身注册到 JMX 对象中
+
 #### Connector 初始化
->Connector 也没有任何 LifecycleListener 不触发任何事件,工作是初始化了连接适配器 提供解析方法集 然后 protocolHandler init
+
+> Connector 也没有任何 LifecycleListener 不触发任何事件,工作是初始化了连接适配器 提供解析方法集 然后 protocolHandler init
+
 ```java
 protected void initInternal() throws LifecycleException {
   // 向JMX 注册connector 对象
@@ -318,8 +335,11 @@ protected void initInternal() throws LifecycleException {
   }
 }
 ```
+
 #### ProtocolHandler
->ProtocolHandler 不是lifecycle子类了,不触发任何事件,主要逻辑为提供更新协议初始化(可选),自身注册JMX,RequestGroupInfo注册JMX,触发 endpoint init
+
+> ProtocolHandler 不是lifecycle子类了,不触发任何事件,主要逻辑为提供更新协议初始化(可选),自身注册JMX,RequestGroupInfo注册JMX,触发 endpoint init
+
 ```java
 // super.init
 public void init() throws Exception {
@@ -362,8 +382,11 @@ public void init() throws Exception {
     endpoint.init();
 }
 ```
-#### Endpinit 
+
+#### Endpinit
+
 > Endpinit不是lifecycle子类了,有三个实现NIOEndpoint NIO2Endpoint AprEndpoint 从endpoint便是4层协议到七层协议的拆包
+
 ```java
 // 统一父类的方法
 public final void init() throws Exception {
@@ -388,7 +411,9 @@ public final void init() throws Exception {
     }
 }
 ```
+
 ##### nio 的实现
+
 ```java
 protected void initServerSocket() throws Exception {
     if (getUseInheritedChannel()) {
@@ -430,7 +455,9 @@ protected void initServerSocket() throws Exception {
     serverSock.configureBlocking(true); //mimic APR behavior
 }
 ```
+
 ##### nio2 的实现
+
 ```java
 // nio2 的实现
 public void bind() throws Exception {
@@ -453,7 +480,9 @@ public void bind() throws Exception {
     initialiseSsl();
 }
 ```
+
 ##### apr 的实现
+
 ```java
 public void bind() throws Exception {
     // Create the root APR memory pool
@@ -554,8 +583,11 @@ public void bind() throws Exception {
     }
 }
 ```
+
 ### 启动 server
+
 #### server 启动
+
 > server 启动过程中 STARTING_PREP 阶段触发 ThreadLocalLeakPrevention 添加threadLocal内存泄漏的解决方案,到Engine/Host/Context的 ***containerListeners*** 不是 ***lifecycleListener*** ;STARTING 阶段会为JNDI资源注册JMX对象,
 
 ```java
@@ -577,8 +609,11 @@ if (periodicEventDelay > 0) {
             () -> startPeriodicLifecycleEvent(), 0, 60, TimeUnit.SECONDS);
 }
 ```
+
 #### service 启动
+
 > service 默认没有listener 无需关注事件发布,只关注startInternal 逻辑为触发 engine/executor/mapperListener/connector 启动
+
 ```java
 protected void startInternal() throws LifecycleException {
 
@@ -612,8 +647,11 @@ protected void startInternal() throws LifecycleException {
 }
 
 ```
+
 #### engine 启动
->engine START_PREP 阶段不触发Listener,STARTING 阶段触发日至打印 engine 启动,然后调用父类 containerBase 的startInternal
+
+> engine START_PREP 阶段不触发Listener,STARTING 阶段触发日至打印 engine 启动,然后调用父类 containerBase 的startInternal
+
 ```java
 protected synchronized void startInternal() throws LifecycleException {
     // Start our subordinate components, if any
@@ -672,10 +710,15 @@ protected synchronized void startInternal() throws LifecycleException {
 }
 
 ```
+
 #### realm 启动
+
 > 由于realm 在init 阶段没有主动init,此处执行 start 得先执行init 过程,init 过程包含 x509用户名检索 对象创建,触发lockoutRealm start,lockoutRealm start 过程中触发Realms 列表触发各自的start 默认配置了 tomcat-users.xml加载到内存获得 database
+
 #### host 启动
+
 > host 从未进行过init 所以 start 之前需要先执行 init, INITIALIZING 阶段不触发Listener,init 阶段主要进行 startStopExecutor 线程池的设置类似 Engine 默认单线程启动,即InlineExecutorService,然后 StandardHost 注册JMX MBean；启动阶段,先发布START_PREP事件,HostConfig 监听该事件检查 server.xml 配置的appBase 和ConfigBase 是不是目录,如果不是打印错误消息,
+
 ```java
 protected synchronized void startInternal() throws LifecycleException {
     // 获取 errorReportValveClass 属性,该属性可通过server.xml 修改 默认为 ErrorReportValve 全类名
@@ -710,8 +753,11 @@ protected synchronized void startInternal() throws LifecycleException {
     super.startInternal();
 }
 ```
+
 ##### Host-Pipeline 启动
+
 > Host-Pipeline 从未init 过于是先init执行空方法,HostPipeline 没有Listener 不用关心事件发布 pipeline start 本质上触发Valve 链表的start HostPipeline 默认持有三个Valve AccessLogValve -> ErrorReportValve -> StandardHostValve 其中 AccessLogValve 启动包含了日志打印的几个对象的初始化,其他的Valva 调用start 过程本质啥都没做
+
 ```java
 protected synchronized void startInternal() throws LifecycleException {
     // 判断first 是否为空 first 一般为首次调用addValve的valve
@@ -730,8 +776,11 @@ protected synchronized void startInternal() throws LifecycleException {
     setState(LifecycleState.STARTING);
 }
 ```
+
 ##### Host 应用部署
+
 > 当Host 委托ContainerBase 执行Children start 和 Valve start 后 发布Starting 事件,此时触发应用部署,部署流程
+
 ```java
 protected void deployApps() {
     // 默认值配置在server.xml 上 为 webapps
@@ -747,11 +796,235 @@ protected void deployApps() {
     deployDirectories(appBase, filteredAppPaths);
 }
 ```
+
 ###### 根据 Context.xml 部署
-// TODO
+
+```java
+protected void deployDescriptor(ContextName cn, File contextXml) {
+
+    DeployedApplication deployedApp = new DeployedApplication(cn.getName(), true);
+
+    long startTime = 0;
+    // Assume this is a configuration descriptor and deploy it
+    if (log.isInfoEnabled()) {
+        startTime = System.currentTimeMillis();
+        log.info(sm.getString("hostConfig.deployDescriptor", contextXml.getAbsolutePath()));
+    }
+
+    Context context = null;
+    boolean isExternalWar = false;
+    boolean isExternal = false;
+    File expandedDocBase = null;
+
+    try (FileInputStream fis = new FileInputStream(contextXml)) {
+        synchronized (digesterLock) {
+            try {
+                context = (Context) digester.parse(fis);
+            } catch (Exception e) {
+                log.error(sm.getString("hostConfig.deployDescriptor.error", contextXml.getAbsolutePath()), e);
+            } finally {
+                digester.reset();
+                if (context == null) {
+                    context = new FailedContext();
+                }
+            }
+        }
+
+        if (context.getPath() != null) {
+            log.warn(sm.getString("hostConfig.deployDescriptor.path", context.getPath(),
+                    contextXml.getAbsolutePath()));
+        }
+
+        Class<?> clazz = Class.forName(host.getConfigClass());
+        LifecycleListener listener = (LifecycleListener) clazz.getConstructor().newInstance();
+        context.addLifecycleListener(listener);
+
+        context.setConfigFile(contextXml.toURI().toURL());
+        context.setName(cn.getName());
+        context.setPath(cn.getPath());
+        context.setWebappVersion(cn.getVersion());
+        // Add the associated docBase to the redeployed list if it's a WAR
+        if (context.getDocBase() != null) {
+            File docBase = new File(context.getDocBase());
+            if (!docBase.isAbsolute()) {
+                docBase = new File(host.getAppBaseFile(), context.getDocBase());
+            }
+            // If external docBase, register .xml as redeploy first
+            if (!docBase.getCanonicalFile().toPath().startsWith(host.getAppBaseFile().toPath())) {
+                isExternal = true;
+                deployedApp.redeployResources.put(
+                        contextXml.getAbsolutePath(), Long.valueOf(contextXml.lastModified()));
+                deployedApp.redeployResources.put(
+                        docBase.getAbsolutePath(), Long.valueOf(docBase.lastModified()));
+                if (docBase.getAbsolutePath().toLowerCase(Locale.ENGLISH).endsWith(".war")) {
+                    isExternalWar = true;
+                }
+                // Check that a WAR or DIR in the appBase is not 'hidden'
+                File war = new File(host.getAppBaseFile(), cn.getBaseName() + ".war");
+                if (war.exists()) {
+                    log.warn(sm.getString("hostConfig.deployDescriptor.hiddenWar",
+                            contextXml.getAbsolutePath(), war.getAbsolutePath()));
+                }
+                File dir = new File(host.getAppBaseFile(), cn.getBaseName());
+                if (dir.exists()) {
+                    log.warn(sm.getString("hostConfig.deployDescriptor.hiddenDir",
+                            contextXml.getAbsolutePath(), dir.getAbsolutePath()));
+                }
+            } else {
+                log.warn(sm.getString("hostConfig.deployDescriptor.localDocBaseSpecified", docBase));
+                // Ignore specified docBase
+                context.setDocBase(null);
+            }
+        }
+
+        host.addChild(context);
+    } catch (Throwable t) {
+        ExceptionUtils.handleThrowable(t);
+        log.error(sm.getString("hostConfig.deployDescriptor.error", contextXml.getAbsolutePath()), t);
+    } finally {
+        // Get paths for WAR and expanded WAR in appBase
+
+        // default to appBase dir + name
+        expandedDocBase = new File(host.getAppBaseFile(), cn.getBaseName());
+        if (context.getDocBase() != null && !context.getDocBase().toLowerCase(Locale.ENGLISH).endsWith(".war")) {
+            // first assume docBase is absolute
+            expandedDocBase = new File(context.getDocBase());
+            if (!expandedDocBase.isAbsolute()) {
+                // if docBase specified and relative, it must be relative to appBase
+                expandedDocBase = new File(host.getAppBaseFile(), context.getDocBase());
+            }
+        }
+
+        boolean unpackWAR = unpackWARs;
+        if (unpackWAR && context instanceof StandardContext) {
+            unpackWAR = ((StandardContext) context).getUnpackWAR();
+        }
+
+        // Add the eventual unpacked WAR and all the resources which will be
+        // watched inside it
+        if (isExternalWar) {
+            if (unpackWAR) {
+                deployedApp.redeployResources.put(
+                        expandedDocBase.getAbsolutePath(), Long.valueOf(expandedDocBase.lastModified()));
+                addWatchedResources(deployedApp, expandedDocBase.getAbsolutePath(), context);
+            } else {
+                addWatchedResources(deployedApp, null, context);
+            }
+        } else {
+            // Find an existing matching war and expanded folder
+            if (!isExternal) {
+                File warDocBase = new File(expandedDocBase.getAbsolutePath() + ".war");
+                if (warDocBase.exists()) {
+                    deployedApp.redeployResources.put(
+                            warDocBase.getAbsolutePath(), Long.valueOf(warDocBase.lastModified()));
+                } else {
+                    // Trigger a redeploy if a WAR is added
+                    deployedApp.redeployResources.put(warDocBase.getAbsolutePath(), Long.valueOf(0));
+                }
+            }
+            if (unpackWAR) {
+                deployedApp.redeployResources.put(
+                        expandedDocBase.getAbsolutePath(), Long.valueOf(expandedDocBase.lastModified()));
+                addWatchedResources(deployedApp, expandedDocBase.getAbsolutePath(), context);
+            } else {
+                addWatchedResources(deployedApp, null, context);
+            }
+            if (!isExternal) {
+                // For external docBases, the context.xml will have been
+                // added above.
+                deployedApp.redeployResources.put(
+                        contextXml.getAbsolutePath(), Long.valueOf(contextXml.lastModified()));
+            }
+        }
+        // Add the global redeploy resources (which are never deleted) at
+        // the end so they don't interfere with the deletion process
+        addGlobalRedeployResources(deployedApp);
+    }
+
+    if (host.findChild(context.getName()) != null) {
+        deployed.put(context.getName(), deployedApp);
+    }
+
+    if (log.isInfoEnabled()) {
+        log.info(sm.getString("hostConfig.deployDescriptor.finished",
+                contextXml.getAbsolutePath(), Long.valueOf(System.currentTimeMillis() - startTime)));
+    }
+}
+```
+
 ###### 部署 war 包
-// TODO
+
+```java
+protected void deployWARs(File appBase, String[] files) {
+    if (files == null) {
+        return;
+    }
+    ExecutorService es = host.getStartStopExecutor();
+    List<Future<?>> results = new ArrayList<>();
+    for (String file : files) {
+        if (file.equalsIgnoreCase("META-INF")) {
+            continue;
+        }
+        if (file.equalsIgnoreCase("WEB-INF")) {
+            continue;
+        }
+
+        File war = new File(appBase, file);
+        if (file.toLowerCase(Locale.ENGLISH).endsWith(".war") && war.isFile() && !invalidWars.contains(file)) {
+            ContextName cn = new ContextName(file, true);
+            if (tryAddServiced(cn.getName())) {
+                try {
+                    if (deploymentExists(cn.getName())) {
+                        DeployedApplication app = deployed.get(cn.getName());
+                        boolean unpackWAR = unpackWARs;
+                        if (unpackWAR && host.findChild(cn.getName()) instanceof StandardContext) {
+                            unpackWAR = ((StandardContext) host.findChild(cn.getName())).getUnpackWAR();
+                        }
+                        if (!unpackWAR && app != null) {
+                            // Need to check for a directory that should not be
+                            // there
+                            File dir = new File(appBase, cn.getBaseName());
+                            if (dir.exists()) {
+                                if (!app.loggedDirWarning) {
+                                    log.warn(sm.getString("hostConfig.deployWar.hiddenDir",
+                                            dir.getAbsoluteFile(), war.getAbsoluteFile()));
+                                    app.loggedDirWarning = true;
+                                }
+                            } else {
+                                app.loggedDirWarning = false;
+                            }
+                        }
+                        removeServiced(cn.getName());
+                        continue;
+                    }
+                    if (!validateContextPath(appBase, cn.getBaseName())) {
+                        log.error(sm.getString("hostConfig.illegalWarName", file));
+                        invalidWars.add(file);
+                        removeServiced(cn.getName());
+                        continue;
+                    }
+                    results.add(es.submit(new DeployWar(this, cn, war)));
+                } catch (Throwable t) {
+                    ExceptionUtils.handleThrowable(t);
+                    removeServiced(cn.getName());
+                    throw t;
+                }
+            }
+        }
+    }
+
+    for (Future<?> result : results) {
+        try {
+            result.get();
+        } catch (Exception e) {
+            log.error(sm.getString("hostConfig.deployWar.threaded.error"), e);
+        }
+    }
+}
+```
+
 ###### 部署 webapps 目录
+
 ```java
 protected void deployDirectories(File appBase, String[] files) {
         // 判断传入的appBase 目录(默认为webapps)文件列表是否为空
@@ -784,7 +1057,8 @@ protected void deployDirectories(File appBase, String[] files) {
                             removeServiced(cn.getName());
                             continue;
                         }
-                        // 调用假线程池提交部署任务
+                        // 调用假线程池提交部署任务,此时会运行DeployDirectory 中的run方法,部署的本质是
+                        // new Context 并设置属性
                         results.add(es.submit(new DeployDirectory(this, cn, dir)));
                     } catch (Throwable t) {
                         ExceptionUtils.handleThrowable(t);
@@ -804,12 +1078,22 @@ protected void deployDirectories(File appBase, String[] files) {
         }
     }
 ```
+
 #### Context 启动
+> 新建Context 添加到Host的Children 触发事件获得 ThreadLocalLeakPreventionListener,由于此时Host 已经处于available,会直接调用start方法先init 再start
 
 
 
+#### wrapper 启动
+> wrapper 通过监听器 ContextConfig 添加到StandardContext的 children Map 中,此时由于 Context 已经处于启动过程,会直接触发 Wrapper 的启动,由LifecycleBase 的经验可知,没有执行过 init 方法的Lifecycle 对象在执行start 时会先执行init 方法,Wrapper 没有LifecycleListener init 方法直接继承ContainerBase,确定了StartStopThread 使用的是假线程池,然后执行 startInternal
 
+#### MapperListener 启动
 
+#### Connector 启动
+
+#### ProtocolHandler 启动
+
+#### Endpoint 启动
 
 ### 停止 server
 
@@ -820,7 +1104,9 @@ protected void deployDirectories(File appBase, String[] files) {
 > 参照 huyiyu tomcat 分支 [README](https://github.com/huyiyu/tomcat/)
 
 ### tomcat 监听器和生命周期对象关系逻辑
+
 #### Server
+
 * **NamingContextListener-CONFIGURE_START_EVENT**: 触发创建NamingContext 并加载server.xml 配置的jndi
 * **VersionLogger-INITIALIZING**:  打印 tomcat 版本,命令行参数,系统参数等信息
 * **AprLifecycle-INITIALIZING**:  检查 apr 扩展是否安装,默认不会安装,如果安装了 执行Library.init() 做APR启动工作
@@ -831,34 +1117,36 @@ protected void deployDirectories(File appBase, String[] files) {
 * **GlobalResourcesLifecycle-STOPPING**:销毁全局JNDI资源
 * **ThreadLocalLeakPrevention-STOPPED**: 关闭 ProtocolHandler 的线程池
 * **AprLifecycle-DESTROYED**: 执行 native 方法 Library.terminate() 做一些APR的清理工作
+
 #### Service
+
 #### StandardEngine
+
 * **EngineConfig-START_EVENT**: 输出 engine 启动日志
 * **EngineConfig-STOP_EVENT**: 输出 engine 结束日志
+
 #### Host
+
 * **HostConfig-PERIODIC_EVENT**:
 * **HostConfig-BEFORE_START_EVENT**: 检查配置的AppBase 和 ConfigBase 是不是目录，如果不是打印错误日志,没有该目录会自动创建
-* **HostConfig-START_EVENT**: 初始化Host Pipeline 后ContainerBase 发布了 Starting 事件,此时HostConfig 监听到该事件触发应用部署
-* **HostConfig-STOP_EVENT**:
+* **HostConfig-START_EVENT**: 初始化Host Pipeline 后ContainerBase 发布了 Starting 事件,此时HostConfig 监听到该事件触发应用部署,应用部署的过程会新建Context 作为Host的children 放入容器
+* **HostConfig-STOP_EVENT**: 向JMX 取消注册 StandardHost 并清除oname属性
+
 #### Context
-* **ContextConfig-CONFIGURE_START_EVENT**：
-* **ContextConfig-BEFORE_START_EVENT**：确定 docBase 的值 设置给Context
+
+* **ContextConfig-CONFIGURE_START_EVENT**：解析所有 web.xml,包含tomcat自带的和项目 WEB-INF/web.xml 具体参照[Constant](https://github.com/huyiyu/tomcat/blob/huyiyu/java/org/apache/catalina/startup/Constants.java#L31)的所有web.xml
+* **ContextConfig-BEFORE_START_EVENT**：确定 docBase 的值 设置给Context,docBase 就是项目名称，此时如果是war包会被解压,验证war 包和目录的创建时间确定是否重新覆盖
 * **ContextConfig-AFTER_START_EVENT**：
 * **ContextConfig-CONFIGURE_STOP_EVENT**：
 * **ContextConfig-AFTER_INIT_EVENT**：digester 加载web目录下 context.xml
 * **ContextConfig-AFTER_DESTROY_EVENT**：
-* **MemoryLeakTrackingListener-AFTER-START-EVENT**：
-* **ThreadLocalLeakPrevention-BEFORE_START_EVENT**：
-* **ThreadLocalLeakPrevention-BEFORE_STOP_EVENT**：
-* **ThreadLocalLeakPrevention-AFTER_STOP_EVENT**：
-
-
-
-
-
-
+* **MemoryLeakTrackingListener-AFTER-START-EVENT**：为Context添加类加载器以及加载的目录,这种可能发生内存泄漏的点
+* **ThreadLocalLeakPrevention-STARTING_PREP**:为 Engine , Host , Context 注册当前 Listener
+* **ThreadLocalLeakPrevention-STOPPING_PREP**:修改当前 serverStoping 值为true
+* **ThreadLocalLeakPrevention-STOPPED**: 关闭 ProtocolHandler 的线程池
 
 #### mapperListener(空)
+
 #### connector(空)
 
 ## 参考
