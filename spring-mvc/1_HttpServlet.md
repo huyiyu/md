@@ -14,7 +14,7 @@
 
 ## HttpServlet
 
-> Servlet 规范中实现了Http规范的Servlet,**service** 方法通过判断请求METHOD 的不同分发到doGet,doPost,doPut,doDelete,doHead,doOptions,doTrace 不支持doPatch方法,子类如果不实现 doGet,
+> Servlet 规范中实现了Http规范的Servlet,**service** 方法通过判断请求METHOD 的不同分发到doGet,doPost,doPut,doDelete,doHead,doOptions,doTrace 不支持doPatch方法,子类如果不实现 doGet,表示不支持doGet方法
 
 ```java
  protected void service(HttpServletRequest req, 
@@ -48,19 +48,19 @@
         doHead(req, resp);
     } else if (method.equals(METHOD_POST)) {
         doPost(req, resp);
-    
+  
     } else if (method.equals(METHOD_PUT)) {
         doPut(req, resp);
-    
+  
     } else if (method.equals(METHOD_DELETE)) {
         doDelete(req, resp);
-    
+  
     } else if (method.equals(METHOD_OPTIONS)) {
         doOptions(req,resp);
-    
+  
     } else if (method.equals(METHOD_TRACE)) {
         doTrace(req,resp);
-    
+  
     } else {
         // 从上面看 HttpServlet 默认不支持PATCH 方法 没有实现返回错误信息
         String errMsg = lStrings.getString("http.method_not_implemented");
@@ -116,7 +116,7 @@ protected void doOptions(HttpServletRequest req, HttpServletResponse resp)
         } else if (methodName.equals("doDelete")) {
             ALLOW_DELETE = true;
         }
-    
+  
     }
     // 拼接字符串并用,分隔 设置到响应头的Allow中
     StringBuilder allow = new StringBuilder();

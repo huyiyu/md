@@ -3,8 +3,11 @@
 > DispatcherServlet 是spring mvc 请求入口,通过DispatcherServlet 将所有请求转发到各个Controller,DispatcherServlet类图如下
 
 ![DispatcherServlet](./image/DispatcherServlet.png)
+
 ## HttpServletBean
+
 > HttpServletBean 继承HttpServlet,所以它满足Servlet HTTP 实现的规范,如果不理解请翻阅[HttpServlet](./1_HttpServlet.md)。同时,实现了EnvironmentAware 令其在Spring 加载InitializingBean过程中会为其提供一个Environment对象,作为HttpServlet 的子类 也会执行生命周期规范,在Servlet 加载过程中执行init方法(spring boot 环境下DispatcherServlet是一个spring Bean,而普通tomcat项目中DispatcherServlet 不是,此时spring mvc 给的方案是 重写getEnvironment)。HttpServletBean init方法是最重要的,实际也仅需阅读init 方法,实际在Spring boot项目中虽然不走从web.xml获取参数封装,但我们也可以文艺复兴一下
+
 ```java
 public final void init() throws ServletException {
     // 验证 servlet 初始化参数有没有漏填必填属性 创建propertyValues
@@ -64,7 +67,9 @@ private static class ServletConfigPropertyValues extends MutablePropertyValues {
     }
 }
 ```
-## FrameworkServlet 
+
+## FrameworkServlet
+
 > 这个类主导了 DispatcherServlet 启动过程的预热行为,它尤为重要,作为实现了ApplicationContextAware接口的Bean,启动时会为其提供一个ApplicationContext。同理它也通过继承拥有了一个Servlet生命周期的初始化方法 `initServletBean`这个初始化方法主做两件事,初始化Spring mvc 的子容器(spring boot 项目中,spring mvc 与spring 共用一个容器);留下另一个模板方法initFrameworkServlet。而在initAppContext 过程中,FrameworkServlet 根据普通Springmvc 加载和spring boot 项目的特点提供了机制确保onRefresh 必执行且只执行一次(后文中DispatcherServlet利用该方法初始化)。
 
 ```java
@@ -157,7 +162,9 @@ protected void configureAndRefreshWebApplicationContext(ConfigurableWebApplicati
     wac.refresh();
 }
 ```
+
 除了对init阶段的干预,FrameworkServlet 重写了service 和 doGet,doPost,doPut,doDelete,doOptions,doTrace 方法导向了processRequest,作为对请求的统一处理
+
 ```java
 /**
  * patch 方法调用springmvc 流程处理 其他的先委托父类处理
@@ -274,8 +281,10 @@ protected void doTrace(HttpServletRequest request, HttpServletResponse response)
     super.doTrace(request, response);
 }
 ```
+
 上面的修改比较次要,便是将所有method 除trace 外导向同一个入口,接下来我们着重讲统一入口processRequest
 此处记录了tomcat 封装request 的时区和语言,替换成自定义的规则,在请求处理完成后,又reset回去。同时打印请求日志,使用AppContext 发布请求处理完成事件
+
 ```java
 /**
  * 全局处理Servlet.service 请求流程的方法 所有 doGet doPost doPut doDelete doPatch doOptions 等
@@ -324,6 +333,7 @@ protected final void processRequest(HttpServletRequest request, HttpServletRespo
 }
 
 ```
-## DispatcherServlet
-> 从上文可知,DispatcherServlet必定存在两个重要方法,`onRefresh`来提供springmvc 的启动,而doService处理请求逻辑
 
+## DispatcherServlet
+
+> 从上文可知,DispatcherServlet必定存在两个重要方法,`onRefresh`来提供springmvc 的启动,而 `doService`处理请求逻辑
