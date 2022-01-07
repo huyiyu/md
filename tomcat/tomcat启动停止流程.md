@@ -1,4 +1,4 @@
-# tomcat 工作原理
+ # tomcat 工作原理
 
 ## 1. Lifecycle 接口
 
@@ -75,7 +75,7 @@ NEW -»-- INITIALIZING        |
 | ObjectCreateRule  | begin 调用时通过 xml 对应属性 ClassName 记录的类创建对象,如果 className 为空,使用参数传入的 ClassName , end() 调用时取出 |
 | SetPropertiesRule | begin调用时通过解析set方法将属性值装配给栈顶的对象                                                                       |
 | SetNextRule       | end 方法调用时将当前对象通过某个方法敷给栈上的下一个对象                                                                 |
-| 原始的server.xml  |                                                                                                                          |
+原始的server.xml
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -385,7 +385,7 @@ public void init() throws Exception {
 
 #### Endpinit
 
-> Endpinit不是lifecycle子类了,有三个实现NIOEndpoint NIO2Endpoint AprEndpoint 从endpoint便是4层协议到七层协议的拆包
+> Endpinit不是lifecycle子类了,有三个实现NIOEndpoint NIO2Endpoint AprEndpoint
 
 ```java
 // 统一父类的方法
@@ -1155,5 +1155,5 @@ protected void deployDirectories(File appBase, String[] files) {
 2. [Tomcat DataSource JNDI Example in Java](https://www.journaldev.com/2513/tomcat-datasource-jndi-example-java)
 3. [servlet 3.1 中文规范](http://zhanjindong.com/assets/pdf/Servlet3.1-Specification.pdf)
 4. [tomcat 架构解析]() 刘光瑞
-5. [NIO,NIO2,APR 谁更快](https://stackoverflow.com/questions/68810106/fastest-connection-for-tomcat-9-0-in-2021-nio-or-apr)
+5. [NIO,NIO2,APR 谁更快](http://events17.linuxfoundation.org/sites/events/files/slides/TomcatOpenSSL.pdf)
 6. [维基百科 X509](https://zh.wikipedia.org/wiki/X.509)
