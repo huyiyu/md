@@ -1,6 +1,7 @@
 # DispatcherServlet
 
 > DispatcherServlet 是spring mvc 请求入口,通过DispatcherServlet 将所有请求转发到各个Controller,DispatcherServlet类图如下
+
 ![DispatcherServlet](./image/DispatcherServlet.png)
 ## HttpServletBean
 > HttpServletBean 继承HttpServlet,所以它满足Servlet HTTP 实现的规范,如果不理解请翻阅[HttpServlet](./1_HttpServlet.md)。同时,实现了EnvironmentAware 令其在Spring 加载InitializingBean过程中会为其提供一个Environment对象,作为HttpServlet 的子类 也会执行生命周期规范,在Servlet 加载过程中执行init方法(spring boot 环境下DispatcherServlet是一个spring Bean,而普通tomcat项目中DispatcherServlet 不是,此时spring mvc 给的方案是 重写getEnvironment)。HttpServletBean init方法是最重要的,实际也仅需阅读init 方法,实际在Spring boot项目中虽然不走从web.xml获取参数封装,但我们也可以文艺复兴一下
