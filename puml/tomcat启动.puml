@@ -1,4 +1,4 @@
-@startuml
+@startuml tomcat 
 @startmindmap
 * Bootstrap
 ** 设置 CATALINA_BASE 和 CATALINA_HOME

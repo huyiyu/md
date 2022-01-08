@@ -72,6 +72,7 @@ private static class ServletConfigPropertyValues extends MutablePropertyValues {
 
 > 这个类主导了 DispatcherServlet 启动过程的预热行为,它尤为重要,作为实现了ApplicationContextAware接口的Bean,启动时会为其提供一个ApplicationContext。同理它也通过继承拥有了一个Servlet生命周期的初始化方法 `initServletBean`这个初始化方法主做两件事,初始化Spring mvc 的子容器(spring boot 项目中,spring mvc 与spring 共用一个容器);留下另一个模板方法initFrameworkServlet。而在initAppContext 过程中,FrameworkServlet 根据普通Springmvc 加载和spring boot 项目的特点提供了机制确保onRefresh 必执行且只执行一次(后文中DispatcherServlet利用该方法初始化)。
 
+### Frameworkservlet 初始化阶段
 ```java
 /**
  * 初始化SpringMvc 子容器
@@ -162,8 +163,8 @@ protected void configureAndRefreshWebApplicationContext(ConfigurableWebApplicati
     wac.refresh();
 }
 ```
-
-除了对init阶段的干预,FrameworkServlet 重写了service 和 doGet,doPost,doPut,doDelete,doOptions,doTrace 方法导向了processRequest,作为对请求的统一处理
+### FrameworkServlet 请求处理阶段
+>除了对init阶段的干预,FrameworkServlet 重写了service 和 doGet,doPost,doPut,doDelete,doOptions,doTrace 方法导向了processRequest,作为对请求的统一处理
 
 ```java
 /**
@@ -282,7 +283,7 @@ protected void doTrace(HttpServletRequest request, HttpServletResponse response)
 }
 ```
 
-上面的修改比较次要,便是将所有method 除trace 外导向同一个入口,接下来我们着重讲统一入口processRequest
+>上面的修改比较次要,便是将所有method 除trace 外导向同一个入口,接下来我们着重讲统一入口processRequest
 此处记录了tomcat 封装request 的时区和语言,替换成自定义的规则,在请求处理完成后,又reset回去。同时打印请求日志,使用AppContext 发布请求处理完成事件
 
 ```java
