@@ -74,7 +74,7 @@ NEW -»-- INITIALIZING        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | ObjectCreateRule  | begin 调用时通过 xml 对应属性 ClassName 记录的类创建对象,如果 className 为空,使用参数传入的 ClassName , end() 调用时取出 |
 | SetPropertiesRule | begin调用时通过解析set方法将属性值装配给栈顶的对象                                                                       |
-| SetNextRule       | end 方法调用时将当前对象通过某个方法敷给栈上的下一个对象                                                                 |
+| SetNextRule       | end 方法调用时将当前对象通过某个方法赋给栈上的下一个对象                                                                 |
 原始的server.xml
 
 ```xml
