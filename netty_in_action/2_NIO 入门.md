@@ -36,7 +36,7 @@ NIO 同样提供SocketChannel和ServerSocketChannel两种不同的套接字通�
 #### 2.通道 channel
 >
 #### 3. 多路复用器 Selector
-
+>
 ## 基于 NIO 2.0 的异步非阻塞(AIO) 编程
 ## 为什么使用NIO
 ## 为什么选择 Netty
