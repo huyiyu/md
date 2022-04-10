@@ -1,0 +1,78 @@
+version: "3"
+services:
+  etcd-1:
+    # 使用 k8s 的 etcd 镜像,不使用 bitnami,阿里云镜像加速
+    image:  quay.io/coreos/etcd:v3.5.2
+    environment:
+    # 允许使用 v2的API
+    - "ETCD_ENABLE_V2=true"
+    - "ETCD_LOGGER=zap"
+    # 到数据目录的路径.
+    - "ETCD_DATA_DIR=/etcd-data"
+    # 名称 etcd 节点
+    - "ETCD_NAME=etcd-1"
+    # 集群通信url
+    - "ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd-1:2380"
+    # 用于监听伙伴通讯的URL列表 如果IP被指定为0.0.0.0,etcd 在所有接口上监听给定端口
+    - "ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380"
+    # 列出这个成员的客户端URL，通告给集群中的其他成员。这些 URL 可以包含域名
+    - "ETCD_ADVERTISE_CLIENT_URLS=http://etcd-1:2379"
+    # 告诉 etcd 在特定的 scheme://IP:port 组合上从客户端接收进来的请求,如果IP被指定为 0.0.0.0,etcd 在所有接口上监听给定端口
+    - "ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379"
+    # 为启动初始化集群配置,etcd 有通过自定义配置中心,官方配置中心,直接定义机器三种方式
+    - "ETCD_INITIAL_CLUSTER=etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380"
+    # 直接设置创建的集群是最新的 这里只能填existing 和 new 不要改动 
+    - "ETCD_INITIAL_CLUSTER_STATE=new"
+    # 集群确认标志 集群节点内部统一
+    - "ETCD_INITIAL_CLUSTER_TOKEN=c6311f3c90a309cbe81c9d70b46f2e63"
+    ports:
+    - "12379:2379"
+    volumes:
+    - ./data/etcd-1:/etcd-data
+    command: etcd
+  etcd-2:
+    image: quay.io/coreos/etcd:v3.5.2
+    environment:
+    - "ETCD_ENABLE_V2=true"
+    - "ETCD_LOGGER=zap"
+    - "ETCD_DATA_DIR=/etcd-data"
+    - "ETCD_NAME=etcd-2"
+    - "ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd-2:2380"
+    - "ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380"
+    - "ETCD_ADVERTISE_CLIENT_URLS=http://etcd-2:2379"
+    - "ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379"
+    - "ETCD_INITIAL_CLUSTER=etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380"
+    - "ETCD_INITIAL_CLUSTER_STATE=new"
+    - "ETCD_INITIAL_CLUSTER_TOKEN=c6311f3c90a309cbe81c9d70b46f2e63"
+    ports:
+    - "22379:2379"
+    volumes:
+    - ./data/etcd-2:/etcd-data
+    command: etcd
+  etcd-3:
+    image: quay.io/coreos/etcd:v3.5.2
+    environment:
+    - "ETCD_ENABLE_V2=true"
+    - "ETCD_LOGGER=zap"
+    - "ETCD_DATA_DIR=/etcd-data"
+    - "ETCD_NAME=etcd-3"
+    - "ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd-3:2380"
+    - "ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380"
+    - "ETCD_ADVERTISE_CLIENT_URLS=http://etcd-3:2379"
+    - "ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379"
+    - "ETCD_INITIAL_CLUSTER=etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380"
+    - "ETCD_INITIAL_CLUSTER_STATE=new"
+    - "ETCD_INITIAL_CLUSTER_TOKEN=c6311f3c90a309cbe81c9d70b46f2e63"
+    ports:
+    - "32379:2379"
+    volumes:
+    - ./data/etcd-3:/etcd-data
+    command: etcd
+  apisix:
+    image: apache/apisix:2.13.0-alpine
+    restart: always
+    volumes:
+      - ./apisix_log:/usr/local/apisix/logs
+      - ./config/apisix/apisix.yaml:/usr/local/apisix/conf/config.yaml:ro
+    ports:
+      - "80:9080/tcp"
