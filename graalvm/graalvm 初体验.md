@@ -58,16 +58,16 @@ native-image Main
 * 新建spring boot3 工程编写 [pom.xml](./pom.xml) 或直接使用当前工程
 * src/main/java 编写 SpringApplication 主入口
 ```java
-package com.example;
+package com.cibidf;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class Main {
+public class Application {
 
 	public static void main(String[] args) {
-		SpringApplication.run(Main.class, args);
+		SpringApplication.run(Application.class, args);
 	}
 }
 ```
