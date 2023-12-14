@@ -1,6 +1,6 @@
 # 使用kuberspray 离线部署攻略
 ## 初始条件
-1. 最少三台干净的机器(物理机或虚拟机)
+1. 最少三台干净的2C4G机器(物理机或虚拟机)
 2. 一台带有docker的机器(最好不要是windows)
 ## 离线包下载
 1. 带docker 的机器运行以下命令
@@ -136,6 +136,7 @@ ssh-copy-id root@192.168.2.108
 ssh-copy-id root@192.168.2.109
 ssh-copy-id root@192.168.2.110
 # 5. 生成部署文件
+declare -a IPS=(192.168.2.108 192.168.2.109 192.168.2.110)
 cp -rfp inventory/sample inventory/mycluster
 CONFIG_FILE=inventory/mycluster/hosts.yaml python3 contrib/inventory_builder/inventory.py ${IPS[@]}
 # 6. 如果之前尝试安装过k8s 卸载他们
