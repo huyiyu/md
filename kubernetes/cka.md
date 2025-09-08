@@ -915,7 +915,28 @@ systemctl status kubelet
 # inactive 状态 于是启动 问题解决
 systemctl start kubelet
 ```
-55. [nodePort 故障排查](https://killercoda.com/sachin/course/CKA/node-port-issue)
+55. [kubectl 端口异常故障排查](https://killercoda.com/sachin/course/CKA/node-port-issue)
+
+```bash
+kubectl cluster-info
+# 测试发现集群客户端信息正常
+kubectl get pod -A 
+# 偶尔出现连接超时，api-server 有可能异常
+kubectl describe po kube-apiserver-controlplane -n kube-system
+#  Startup probe failed: Get "https://172.30.1.2:6433/livez": dial tcp 172.30.1.2:6433: connect: connection refused 健康检查异常,知道 api-server 是static-pod 启动的。直接查看 /etc/kubernetes/manifest/kube-apiserver.yaml修改端口6433 为6443
+```
+60. [deploy 故障排查](https://killercoda.com/sachin/course/CKA/deployment-issue-3)
+
+```bash
+k describe po postgres-deployment-68d5bf48b6-b4brs
+# describe 发现 configmap postgres-db-config 不存在,可能名字写错了
+k get cm 
+# 果然 只发现 postgres-config 未出现 postgres-db-config 
+k get cm -o jsonpath-as-json='{.data}'
+# 出现 POSTGRES_DB 和 POSTGRES_USER 两个key 同步修改 deployment 中引用
+k edit deploy postgres-deployment
+# 编辑后启动失败 发现相似问题 secret 名称写错 继续编辑完成
+```
 
 
 
