@@ -11,6 +11,8 @@
 ## 注意事项
 - [x] 使用 `alias k=kubectl`指令缩短命令,模拟环境和考试环境都可以这么做,以下命令都采取该做法。
 - [x] 正式考试时,真实考试环境有多个context,执行命令前要选择对应的context。
+- [x] 掌握快速强制删除: `--force --grace-period=0`
+- [x] 掌握生成模板指令: `--dry-run=NONE -o yaml `
 
 ## 各题型快速解答
 ### 根据要求完成创建/修改体型
@@ -64,7 +66,27 @@ k create secret generic database-app-secret --from-file=database-data.txt
 7. [集群升级](https://killercoda.com/sachin/course/CKA/cluster-upgrade) ***重要！！！难点！！！***
 
 ```bash
-# TODO 
+# 先更新linux 包依赖
+apt update 
+# 查看最新的包
+apt list kubeadm
+# 如果当前节点有工作负载 (业务负载) 驱逐到其他的节点上
+kubectl drain [nodeName] --ignore-daemonsets
+# 下载对应版本的包 此处以1.33.4-1.1 为例
+apt install kubeadm=1.33.4-1.1 kubelet=1.33.4-1.1 kubectl=1.33.4-1.1
+# 查看升级计划
+kubeadm upgrade plan
+# controlplane 节点执行
+kubeadm upgrade apply v1.33.4
+# node 节点执行
+kubeadm upgrade node
+# systemctl 重启kubelet
+systemctl daemon-reload
+systemctl restart kubelet
+# 检查集群状态
+kubectl get nodes
+# 把驱逐的工作负载拉回来
+kubectl uncordon [nodeName]
 ```
 
 8. [service 过滤](https://killercoda.com/sachin/course/CKA/service-filter)
@@ -907,7 +929,12 @@ k describe po kube-controller-manager-controlplane
 vim /etc/kubernetes/manifest/kube-controller-manager.yaml
 ```
 
-53. [network-policy 故障排查]()
+53. [network-policy 故障排查](https://killercoda.com/sachin/course/CKA/network-policy-issue)
+
+```bash
+
+```
+
 54. [node 不ready](https://killercoda.com/sachin/course/CKA/node-notready)
 ```bash
 # 之前说过kubelet 作为node agent通信,node 不正常先检查kubelet 
@@ -937,14 +964,209 @@ k get cm -o jsonpath-as-json='{.data}'
 k edit deploy postgres-deployment
 # 编辑后启动失败 发现相似问题 secret 名称写错 继续编辑完成
 ```
+61. [deploy 故障排查](https://killercoda.com/sachin/course/CKA/deployment-issue-2)
 
+```bash
+k apply -f frontend-deployment.yaml
+# 报错,namespace 不存在 先创建
+k create ns nginx-ns
+# 重新apply
+k apply -f frontend-deployment.yaml
+```
+62. [PV,PVC故障排查](https://killercoda.com/sachin/course/CKA/pv-pvc-issue)
+```bash
+# 查看pv 和pvc 匹配问题
+k get pv my-pv -o yaml
+k get pvc my-pvc -o yaml
+# 发现 accessModes 不一致,且pvc capacity 比pv 大 于是修改pvc
+k edit pvc my-pvc
+# 修改 accessModes ReadWriteOnce ,capacity 100Mi 保存 报非法操作
+k replace -f /tmp/kubectl-edit-3437866368.yaml --force
+# 强行replace
+```
+63. [cronJob 故障排查](https://killercoda.com/sachin/course/CKA/cronjob-issue)
+> cron job 会定期生成job job 会启动pod 运行任务 完成后显示complete
 
+```bash
+k logs -f cka-cronjob-29288849-h7z56 
+# 日志中 Could not resolve host: cka-pod 按照体感要求应该是流量要过service 所以应该是command 有问题
+k edit cj cka-cronjob
+# 修改command curl cka-service 继续报错,查询service 的endpoint 列表
+k describe svc cka-service 
+# 列表为空 索命 selector 和 label 不匹配
+k get svc cka-service -o custom-columns=selector:spec.selector
+# 查询选择器指定的selector app:cka-pod
+k get po cka-pod -o custom-columes=labels:metadata.labels
+# 查询label 为空,要为cka-pod 添加label
+k label pod cka-pod app=cka-pod
+# 修改schedule */1 * * * * 每分钟运行一次
+```
+64. [RBAC问题排查](https://killercoda.com/sachin/course/CKA/sa-cr-crb-issue)
 
+> 掌握kubernetes 的rbac 模型 
 
+```bash
+k get sa dev-sa
+# 获取dev-sa 看是否创建 确认已经创建
+k get rolebinding dev-role-binding-cka -o yaml
+# 获取 dev-role-binding-cka 查看绑定关系 确认绑定了dev-role-cka
+k get dev-role-cka -o yaml 
+# 获取role 确认设置权限是否有问题,有问题应该修改 verbs添加 create list get,resource 添加 services 和 pods
+k edit role dev-role-cka
+```
+
+65. [RBAC问题排查2](https://killercoda.com/sachin/course/CKA/sa-cr-crb-issue-1)
+> 掌握kubernetes 的rbac 模型 
+```bash
+k get sa prod-sa
+# 获取prod-sa 看是否创建 确认已经创建
+k get rolebinding prod-role-binding-cka -o yaml
+# 获取 dev-role-binding-cka 查看绑定关系 确认绑定了dev-role-cka
+k get prod-role-cka -o yaml 
+# 获取role 确认设置权限是否有问题,有问题应该修改 verbs添加 create list get,resource 添加 services
+k edit role prod-role-cka
+```
+66. [daemonSet问题排查](https://killercoda.com/sachin/course/CKA/ds-issue)
+
+```bash 
+k get po -o wide 
+# 打印 pod 落在了哪些node上,图可知node01 已经有ds,controllplane 没有是因为有污点,那么可以让ds 生成的pod 有容忍污点的能力
+k get no controlplane -o jsonpath-as-json='{.spec.taints}'
+# 获取controlplane 节点的污点
+k edit ds cache-daemonset 
+# 添加 controlplane 污点 node-role.kubernetes.io/control-plane
+```
+
+67. [etcd 备份问题排查](https://killercoda.com/sachin/course/CKA/etcd-backup-issue)
+
+```bash
+k logs -f etcd-controlplane -n kube-system
+# 检查ETCD 发现在不断地重启,日志链接不上kubelet 端口。初步判断kubelet 挂了(kubelet 端口10250)
+systemctl start kubelet 
+# etcd 备份并存储恢复日志
+etcdctl --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+        --cert=/etc/kubernetes/pki/etcd/server.crt \
+        --key=/etc/kubernetes/pki/etcd/server.key \
+        --endpoints=localhost:2379 \
+        snapshot save /opt/cluster_backup.db > backup.txt 2>&1
+```
 ### 工作负载部署相关
-64-74
+68. [回滚应用练习](https://killercoda.com/sachin/course/CKA/rollback)
 
+```bash
+# 回滚版本到上一个
+k rollout undo deploy redis-deployment  
+# 保存回滚后的镜像名
+k get deploy redis-deployment  -o jsonpath='{.spec.template.spec.containers[0].image}' > rolling-back-image.txt
+# 扩容到 3 实例
+k scale deploy redis-deployment --replicas=3
+```
 
+69.  [快速创建deployment](https://killercoda.com/sachin/course/CKA/deployment)
+```bash
+# 创建deployment 
+k create deploy nginx-app-deployment --image=nginx --replicas=3
+```
+70.  [扩缩容deployment](https://killercoda.com/sachin/course/CKA/deployment-scale)
+    
+```bash
+# 扩容到 3 实例
+k scale deploy redis-deploy -n redis-ns --replicas=3
+```
+71. [deployment 引用secret](https://killercoda.com/sachin/course/CKA/deployment-secret)
+```bash
+# 快速创建secret
+k create secret generic db-secret \
+--from-literal=DB_Host=mysql-host \
+  --from-literal=DB_User=root \
+  --from-literal=DB_Password=dbpassword
+# 编辑 deploy 保存,格式如下 替换掉三个变量
+k edit deploy webapp-deployment
+# - name: DB_Host
+#   valueFrom:
+#     secretKeyRef:
+#       key: DB_Host
+#      name: db-secret
+```
+
+72. [更新参数设置](https://killercoda.com/sachin/course/CKA/deployment-rollout)
+```bash
+# 快速创建模板,手动编辑新增滚动升级参数
+kubectl create deploy cache-deployment  --replicas=2 --image=redis:7.0.13 --dry-run=none -o yaml > deploy.yml
+# 部署
+k apply -f deploy.yml
+# 更新镜像
+k patch deploy cache-deployment --type=json -p '[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"redis:7.2.1"}]'
+# 查看更新历史
+k rollout history deploy cache-deployment
+# 观察得到2次
+echo 2 > total-revision.txt
+```
+73. [pod和service练习](https://killercoda.com/sachin/course/CKA/pod-svc-1)
+```bash
+# 创建ubuntu pod 使用标签 app=os
+k run ubuntu-pod --image=ubuntu -l app=os 
+# 快速创建 service 
+k expose pod ubuntu-pod --port=8080 --name=ubuntu-service
+```
+74. [configmap和deploy练习](https://killercoda.com/sachin/course/CKA/configmap-deploy)
+```bash
+# 快速创建configMap
+k create cm webapp-deployment-config-map --from-literal=APPLICATION=web-app
+# 通过edit 更新deployment 修改env引用
+k edit deploy webapp-deployment
+# - name: APPLICATION
+#   valueFrom:
+#     configMapKeyRef:
+#       key: APPLICATION
+#       name: webapp-deployment-config-map
+```
+
+75. [pod和service练习](https://killercoda.com/sachin/course/CKA/pod-svc)
+```bash
+# 快速创建模板
+k run app-pod --image=httpd:latest --dry-run=client -o yaml > app-pod.yml
+# 修改 app-pod.yml container name 和containerPort,然后apply
+k apply -f  app-pod.yml
+# 为pod 新增label app=app-lab
+k label po app-pod app=app-pod
+# 为pod 快速创建service 
+k expose po app-pod --port=80 --target-port=80 --type=ClusterIP --selector=app=app-lab --name=app-svc
+# port-forward 映射端口
+k port-forward pod/app-pod 80:80
+# curl 测试
+curl localhost
+```
+76. [deployment 问题排查](https://killercoda.com/sachin/course/CKA/deployment-1)
+```bash
+# 直接apply 
+k apply -f my-app-deployment.yaml
+# 根据报错limit 大于request 应该写错了对调一下 
+# 重新apply 镜像下载失败 检查镜像名称 修改为 nginx:latest
+# 重新apply 仅有一个ready 另一个pending describe 
+k describe po my-app-deployment-565ccc7569-hmwt5
+# 发现controlplane 有污点 node-role.kubernetes.io/control-plane 禁止调度,为模板新增容忍度
+# tolerations
+# - key: node-role.kubernetes.io/control-plane
+#   effect: NoSchedule
+#   operator: Exists  
+```
+77. [部署历史](http://kkillercoda.com/sachin/course/CKA/deployment-history)
+```bash
+# 部署历史查询 得到三次
+k rollout history deploy video-app 
+# 查询第三次部署详情 得到镜像名称 redis:7.0.13
+k rollout history deploy video-app --revision=3
+# 按格式 REVISION_TOTAL_COUNT,IMAGE_NAME 输出到 app-file.txt
+echo "3,redis:7.0.13" > app-file.txt
+```
+78. [pod 资源调整](https://killercoda.com/sachin/course/CKA/pod)
+```bash 
+# 通过edit 调整 resources.limits.memory = 50Mi
+k edit po my-pod
+# pod edit 无法直接更新 使用replace force 更新
+k replace -f /tmp/kubectl-edit-2215633761.yaml --force
+```
 
 
 
