@@ -280,7 +280,7 @@ k -n dns-ns exec -it dns-rs-cka-l7flw -- nslookup kubernetes.default
 # 无法解析kubernete.default 怀疑coredns 服务问题,发现endpoint 列表缺少core dns 
 k describe svc kube-dns -n kube-system
 # 进一步发现 service 和 deployment label 不匹配,deploy模板是kube-dns svc是core-dns,选择其中一个修改一致即可,建议修改svc 如果修改deploy 要同步修改deployment 的matchLabel 同时等待新的pod 启动
-k get deployment.apps/coredns -o jsonpath-as-json='{.spec.template.metadata.labels}' -n kube-system
+k get deploy coredns -n kube-system  --show-labels
 k get svc kube-dns -n kube-system -o jsonpath-as-json='{.spec.selector}'
 # 使用 edit 修改service,和deployment 保持一致
 k patch service kube-dns -n kube-system -p '{"spec":{"selector":{"k8s-app": "kube-dns"}}}'
@@ -787,9 +787,9 @@ k describe po frontend
 # 继续 describe 发现无法调度到节点上,提示是一个节点不满足条件(node01),一个节点上有污点(controlplane) 看一下当前 pod,节点匹配
 k get po frontend -o yaml
 # 发现设置了强制节点亲和（需要有 label: NodeName=frontend 才能调度）继续查看哪个node 有这个label
-k get no -o custom-columns=name:metadata.name,labels:metadata.labels
+k get no --show-labels
 # 发现 node01 标签写错了,修改frontendnode 为frontend
-k patch node node01 -p '{"metadata":{"labels":{"NodeName":"frontend"}}}'
+k label no node01 NodeName=frontend --overwrite
 ```
 42. [pod 问题排查-5](https://killercoda.com/sachin/course/CKA/pod-issue-4)
 > 考察 explain 子命令使用,健康检查配置
@@ -865,7 +865,7 @@ k describe svc nginx-service
 k get pod nginx-pod -o yaml
 k get svc nginx-service -o yaml
 # pod 未定义label 而service 定义 label 选择器为 app: nginx-pod 于是添加label 给pod
-k patch pod nginx-pod -p '{"metadata":{"labels":{"app":"nginx-pod"}}}'
+k label pod nginx-pod app=nginx-pod
 # port-forward 重新测试 问题解决
 ```
 49. [kubelet 问题排查](https://killercoda.com/sachin/course/CKA/kubelet-issue)
@@ -996,7 +996,7 @@ k describe svc cka-service
 # 列表为空 索命 selector 和 label 不匹配
 k get svc cka-service -o custom-columns=selector:spec.selector
 # 查询选择器指定的selector app:cka-pod
-k get po cka-pod -o custom-columes=labels:metadata.labels
+k get po cka-pod --show-labels
 # 查询label 为空,要为cka-pod 添加label
 k label pod cka-pod app=cka-pod
 # 修改schedule */1 * * * * 每分钟运行一次
