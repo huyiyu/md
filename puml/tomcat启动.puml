@@ -1,0 +1,39 @@
+@startuml tomcat 
+@startmindmap
+* Bootstrap
+** 设置 CATALINA_BASE 和 CATALINA_HOME
+**  Bootstrap init
+*** 从 catalina.properties初始化类加载器
+*** 使用 catalina.loader 初始化类
+*** 创建 Catalina 对象 设置其parentClassLoader值为catalina.loader
+**  Catalina load
+*** 设置JNDI属性
+*** 使用Digester解析server.xml 并创建
+*** 增强系统输入输出流
+*** server init
+**** server注册 JMX 
+**** 初始化 utilityExecutor 线程池
+**** JMX 注册 utilityExecutor,StringCache,MBeanFactory
+**** globalNamingResources init
+**** 尝试加载 urlClassLoader 的包
+**** service init
+***** service 注册 JMX
+***** engine init
+***** executor init
+***** mapperListenr init
+***** connector init
+****** protocolHandler init
+******* endpoint init
+** bootstrap 启动
+*** server start
+**** globalNamingResources start
+**** service start
+***** engine start
+***** executor start
+***** mapperListener start
+***** connector start
+****** protocolHandler start
+******* endpoint start
+** bootstrap 停止
+@endmindmap
+@enduml

@@ -1,0 +1,4 @@
+@startuml
+AnnotatedBeanDefinitionReader -> AnnotationConfigUtils: registerAnnotationConfigProcçessors
+AnnotationConfigUtils -> DefaultListableBeanFactory: registerBeanDefinition
+@enduml

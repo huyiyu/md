@@ -1,0 +1,35 @@
+@startmindmap java 人学习路线
+* java 学习路线入门版
+** java 基础
+*** Java 语法/基础数据类型
+*** String 相关API
+*** 集合API list,set,map
+*** IO 流
+*** 线程
+*** 网络编程
+*** jdk 动态代理
+*** 正则表达式
+*** servlet
+*** jdbc∏
+** 设计模式 (并不是其他模式不重要,是这些模式要重点掌握)
+*** 装饰者设计模式
+*** 策略模式
+*** 观察者模式
+*** 适配器设计模式
+** 框架
+*** spring-framework
+*** spring-mvc
+*** spring-boot
+*** jdbc
+*** mybatis
+** 中间件
+*** docker/docker-compose
+*** nginx
+** 构建工具
+*** maven
+@endmindmap
+
+
+
+
+@startmindmap

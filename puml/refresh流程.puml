@@ -1,0 +1,20 @@
+@startuml
+@startmindmap
+* AppContext Refresh
+** prepareRefresh
+*** initPropertySources
+*** validateRequiredProperties
+** obtainFreshBeanFactory
+*** refreshBeanFactory
+** prepareBeanFactory
+** postProcessBeanFactory
+** invokeBeanFactoryPostProcessors
+** registerBeanPostProcessors
+** initMessageSource
+** initApplicationEventMulticaster
+** onRefresh
+** registerListeners
+** finishBeanFactoryInitialization
+** finishRefresh
+@endmindmap
+@enduml

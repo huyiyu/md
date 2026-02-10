@@ -1,0 +1,46 @@
+@startmindmap sqlSessionFactory 创建
+* 创建sqlSessionFactory
+** 解析 configration.xml
+*** 解析properties 标签
+*** 解析自定义vfs实现
+*** 解析日志框架实现
+*** 解析别名
+*** 解析插件(Interceptor相关)
+*** 解析返回值工厂
+**** ObjectFactory
+**** ObjectWrapperFactory
+**** ReflectorFactory
+*** configuration 其他属性解析
+*** 环境解析
+*** 数据库元数据解析(databaseId)
+*** 类型转换解析
+*** mapper解析
+**** mapper.xml 解析
+***** 二级缓存配置相关解析
+***** parameterMap 解析(不要用)
+***** resultMap 解析
+***** sql 标签解析
+***** sql 语句相关标签解析(select|insert|update|delete)
+****** 匹配dataBaseId一致
+****** 获取id(mapper接口方法名)
+****** 获取标签名
+******* select 考虑查询缓存
+******* 非 select 考虑缓存刷新
+****** include 解析
+****** parameterType 解析
+****** languageDriver 选择,默认XML
+****** selectKey,keyGenerate 解析
+****** sqlSource 解析
+******* 判断内容是否有${} 占位符
+******* 判断是否有动态标签,策略模式执行(trim,where,set,if,foreach,choose,when,otherwise,bind)
+******* RawSqlSource
+****** statementType 解析
+******* 普通执行器
+******* 预编译执行器
+******* 带存储过程执行器 
+**** mapper 接口解析
+***** 解析接口上的注解(不做重点掌握)
+***** 加入knowMappers Map表,key是MapperClass Value是MapperProxyFactory(jdk动态代理创建Mapper的工厂)
+** 创建 SqlSessionFactory
+@endmindmap
+

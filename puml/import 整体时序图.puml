@@ -1,0 +1,7 @@
+@startuml
+AnnotationGenericAppContext-> AbstractAppContext:refresh 
+AbstractAppContext->PostProcessorRegistrationDelegate:invokeBeanFactoryPostProcessors
+PostProcessorRegistrationDelegate->ConfigurationClassPostProcessor:postProcessBeanDefinitionRegistry
+ConfigurationClassPostProcessor->ConfigurationClassParser:parse
+ConfigurationClassParser->ConfigurationClassParser:processImports
+@enduml

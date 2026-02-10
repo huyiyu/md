@@ -1,0 +1,11 @@
+@startuml repilcationController
+start
+repeat
+:寻找匹配标签选择器的 POD;
+if(比较匹配器的数量和期望的数量) then (太少了)
+    :从当前模板创建POD;
+else(太多了)
+    :删除超出的POD;
+endif
+:刚好;
+@enduml
